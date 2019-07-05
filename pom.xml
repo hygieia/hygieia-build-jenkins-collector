@@ -2,18 +2,19 @@
 
   <modelVersion>4.0.0</modelVersion>
 
+  <groupId>com.capitalone.dashboard</groupId>
+  <artifactId>jenkins-build-collector</artifactId>
   <name>${project.groupId}:${project.artifactId}</name>
   <description>BuildCollector Microservice</description>
   <url>https://github.com/capitalone/Hygieia</url>
   <packaging>jar</packaging>
 
-  <artifactId>jenkins-build-collector</artifactId>
+
 
   <parent>
     <groupId>com.capitalone.dashboard</groupId>
     <artifactId>Hygieia</artifactId>
-    <version>3.0.2-SNAPSHOT</version>
-    <relativePath>../../..</relativePath>
+    <version>3.0.1</version>
   </parent>
 
   <distributionManagement>
