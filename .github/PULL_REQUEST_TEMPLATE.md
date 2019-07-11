@@ -18,11 +18,10 @@
 -->
 **Affects:** \<jenkins-collector-version-number>.
 
+Have you signed the CLA? - [Yes/No]
+
 ---
 <!--
-Thanks for taking the time to create an issue. Please read the following:
-
-- Questions should be asked on Stack Overflow.
 - For bugs, specify affected versions and explain what you are trying to do.
 - For enhancements, provide context and describe the problem.
 
