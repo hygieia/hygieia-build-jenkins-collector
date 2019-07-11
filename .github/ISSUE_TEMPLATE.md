@@ -16,7 +16,7 @@
 !!! For Security Vulnerabilities, please go to https://gitter.im/capitalone/Hygieia and find
     an active team memberl, request their email address, and email directly!!!
 -->
-**Affects:** \<github-collector-version-number>.
+**Affects:** \<jenkins-collector-version-number>.
 
 ---
 <!--
