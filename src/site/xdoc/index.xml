@@ -20,8 +20,8 @@
     </properties>
     <body>
         <!-- ================================================== -->
-        <section name="Hygieia Github Collector">
-            Welcome to the Hygieia Github Collector
+        <section name="Hygieia Jenkins Collector">
+            Welcome to the Hygieia Jenkins Collector
         </section>
         <!-- ================================================== -->
 
