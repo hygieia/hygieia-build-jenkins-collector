@@ -28,5 +28,6 @@ notifications:
     on_success: always
     on_failure: always
 before_install:
+- cp ./src/devops/keys.gpg.enc .
 - openssl aes-256-cbc -K $encrypted_a637edeba4c0_key -iv $encrypted_a637edeba4c0_iv
-  -in src/devops/keys.gpg.enc -out keys.gpg -d
+  -in keys.gpg.enc -out keys.gpg -d
