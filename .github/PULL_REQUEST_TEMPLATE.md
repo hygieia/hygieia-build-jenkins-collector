@@ -18,7 +18,11 @@
 -->
 **Affects:** \<jenkins-collector-version-number>.
 
-Have you signed the CLA? - [Yes/No]
+
+* [Individual Agreement](https://docs.google.com/forms/d/19LpBBjykHPox18vrZvBbZUcK6gQTj7qv1O5hCduAZFU/viewform)
+* [Corporate Agreement](https://docs.google.com/forms/d/e/1FAIpQLSeAbobIPLCVZD_ccgtMWBDAcN68oqbAJBQyDTSAQ1AkYuCp_g/viewform?usp=send_form)
+
+- [ ] I Have signed the CLA
 
 ---
 <!--
