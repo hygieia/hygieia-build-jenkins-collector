@@ -382,9 +382,12 @@ public class DefaultHudsonClient implements HudsonClient {
         URL instanceUrl = new URL(server);
         String userInfo = instanceUrl.getUserInfo();
         String instanceProtocol = instanceUrl.getProtocol();
-
+	    
+	//decode to handle + in the job name.
+        String buildEscapeChar = build.replace("+","%2B");
+	    
         //decode to handle spaces in the job name.
-        URL buildUrl = new URL(URLDecoder.decode(build, "UTF-8"));
+        URL buildUrl = new URL(URLDecoder.decode(buildEscapeChar, "UTF-8"));
         String buildPath = buildUrl.getPath();
 
         String host = buildUrl.getHost();
