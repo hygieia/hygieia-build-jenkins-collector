@@ -1,15 +1,9 @@
 package com.capitalone.dashboard.collector;
 
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.Date;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-
+import com.capitalone.dashboard.model.*;
+import com.capitalone.dashboard.repository.*;
+import com.google.common.collect.Lists;
 import org.apache.commons.lang3.StringUtils;
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,99 +12,84 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 import org.springframework.web.client.RestClientException;
 
-import com.capitalone.dashboard.model.BaseModel;
-import com.capitalone.dashboard.model.Build;
-import com.capitalone.dashboard.model.CollectorItem;
-import com.capitalone.dashboard.model.CollectorItemConfigHistory;
-import com.capitalone.dashboard.model.CollectorType;
-import com.capitalone.dashboard.model.Configuration;
-import com.capitalone.dashboard.model.HudsonCollector;
-import com.capitalone.dashboard.model.HudsonJob;
-import com.capitalone.dashboard.repository.BaseCollectorRepository;
-import com.capitalone.dashboard.repository.BuildRepository;
-import com.capitalone.dashboard.repository.CollItemConfigHistoryRepository;
-import com.capitalone.dashboard.repository.ComponentRepository;
-import com.capitalone.dashboard.repository.ConfigurationRepository;
-import com.capitalone.dashboard.repository.HudsonCollectorRepository;
-import com.capitalone.dashboard.repository.HudsonJobRepository;
-import com.google.common.collect.Lists;
+import java.util.*;
 
 
 /**
  * CollectorTask that fetches Build information from Hudson
  */
 @Component
-public class HudsonCollectorTask extends CollectorTask<HudsonCollector> {
+public class TeamcityCollectorTask extends CollectorTask<TeamcityCollector> {
     @SuppressWarnings("PMD.UnusedPrivateField")
 //    private static final Log LOG = LogFactory.getLog(HudsonCollectorTask.class);
 
-    private final HudsonCollectorRepository hudsonCollectorRepository;
-    private final HudsonJobRepository hudsonJobRepository;
+    private final TeamcityCollectorRepository teamcityCollectorRepository;
+    private final TeamcityJobRepository teamcityJobRepository;
     private final BuildRepository buildRepository;
     private final CollItemConfigHistoryRepository configRepository;
-    private final HudsonClient hudsonClient;
-    private final HudsonSettings hudsonSettings;
+    private final TeamcityClient teamcityClient;
+    private final TeamcitySettings teamcitySettings;
     private final ComponentRepository dbComponentRepository;
 	private final ConfigurationRepository configurationRepository;
 
     @Autowired
-    public HudsonCollectorTask(TaskScheduler taskScheduler,
-                               HudsonCollectorRepository hudsonCollectorRepository,
-                               HudsonJobRepository hudsonJobRepository,
-                               BuildRepository buildRepository, CollItemConfigHistoryRepository configRepository, HudsonClient hudsonClient,
-                               HudsonSettings hudsonSettings,
-                               ComponentRepository dbComponentRepository, 
-                               ConfigurationRepository configurationRepository) {
-        super(taskScheduler, "Hudson");
-        this.hudsonCollectorRepository = hudsonCollectorRepository;
-        this.hudsonJobRepository = hudsonJobRepository;
+    public TeamcityCollectorTask(TaskScheduler taskScheduler,
+                                 TeamcityCollectorRepository teamcityCollectorRepository,
+                                 TeamcityJobRepository teamcityJobRepository,
+                                 BuildRepository buildRepository, CollItemConfigHistoryRepository configRepository, TeamcityClient teamcityClient,
+                                 TeamcitySettings teamcitySettings,
+                                 ComponentRepository dbComponentRepository,
+                                 ConfigurationRepository configurationRepository) {
+        super(taskScheduler, "Teamcity");
+        this.teamcityCollectorRepository = teamcityCollectorRepository;
+        this.teamcityJobRepository = teamcityJobRepository;
         this.buildRepository = buildRepository;
         this.configRepository = configRepository;
-        this.hudsonClient = hudsonClient;
-        this.hudsonSettings = hudsonSettings;
+        this.teamcityClient = teamcityClient;
+        this.teamcitySettings = teamcitySettings;
         this.dbComponentRepository = dbComponentRepository;
 		this.configurationRepository = configurationRepository;
     }
 
     @Override
-    public HudsonCollector getCollector() {
-    	Configuration config = configurationRepository.findByCollectorName("Hudson");
+    public TeamcityCollector getCollector() {
+    	Configuration config = configurationRepository.findByCollectorName("Teamcity");
         // Only use Admin Page Jenkins server configuration when available
         // otherwise use properties file Jenkins server configuration
         if (config != null ) {
 			config.decryptOrEncrptInfo();
 			// To clear the username and password from existing run and
 			// pick the latest
-            hudsonSettings.getUsernames().clear();
-            hudsonSettings.getServers().clear();
-            hudsonSettings.getApiKeys().clear();
-			for (Map<String, String> jenkinsServer : config.getInfo()) {
-				hudsonSettings.getServers().add(jenkinsServer.get("url"));
-				hudsonSettings.getUsernames().add(jenkinsServer.get("userName"));
-				hudsonSettings.getApiKeys().add(jenkinsServer.get("password"));
+            teamcitySettings.getUsernames().clear();
+            teamcitySettings.getServers().clear();
+            teamcitySettings.getApiKeys().clear();
+			for (Map<String, String> TeamcityServer : config.getInfo()) {
+				teamcitySettings.getServers().add(TeamcityServer.get("url"));
+				teamcitySettings.getUsernames().add(TeamcityServer.get("userName"));
+				teamcitySettings.getApiKeys().add(TeamcityServer.get("password"));
 			}
 		}
-        return HudsonCollector.prototype(hudsonSettings.getServers(), hudsonSettings.getNiceNames(),
-                hudsonSettings.getEnvironments());
+        return TeamcityCollector.prototype(teamcitySettings.getServers(), teamcitySettings.getNiceNames(),
+                teamcitySettings.getEnvironments());
     }
 
     @Override
-    public BaseCollectorRepository<HudsonCollector> getCollectorRepository() {
-        return hudsonCollectorRepository;
+    public BaseCollectorRepository<TeamcityCollector> getCollectorRepository() {
+        return teamcityCollectorRepository;
     }
 
     @Override
     public String getCron() {
-        return hudsonSettings.getCron();
+        return teamcitySettings.getCron();
     }
 
     @Override
-    public void collect(HudsonCollector collector) {
+    public void collect(TeamcityCollector collector) {
         long start = System.currentTimeMillis();
         Set<ObjectId> udId = new HashSet<>();
         udId.add(collector.getId());
-        List<HudsonJob> existingJobs = hudsonJobRepository.findByCollectorIdIn(udId);
-        List<HudsonJob> activeJobs = new ArrayList<>();
+        List<TeamcityJob> existingJobs = teamcityJobRepository.findByCollectorIdIn(udId);
+        List<TeamcityJob> activeJobs = new ArrayList<>();
         List<String> activeServers = new ArrayList<>();
         activeServers.addAll(collector.getBuildServers());
 
@@ -119,7 +98,7 @@ public class HudsonCollectorTask extends CollectorTask<HudsonCollector> {
         for (String instanceUrl : collector.getBuildServers()) {
             logBanner(instanceUrl);
             try {
-                Map<HudsonJob, Map<HudsonClient.jobData, Set<BaseModel>>> dataByJob = hudsonClient
+                Map<TeamcityJob, Map<TeamcityClient.jobData, Set<BaseModel>>> dataByJob = teamcityClient
                         .getInstanceJobs(instanceUrl);
                 log("Fetched jobs", start);
                 activeJobs.addAll(dataByJob.keySet());
@@ -140,11 +119,11 @@ public class HudsonCollectorTask extends CollectorTask<HudsonCollector> {
     /**
      * Clean up unused hudson/jenkins collector items
      *
-     * @param collector    the {@link HudsonCollector}
+     * @param collector    the {@link TeamcityCollector}
      * @param existingJobs
      */
 
-    private void clean(HudsonCollector collector, List<HudsonJob> existingJobs) {
+    private void clean(TeamcityCollector collector, List<TeamcityJob> existingJobs) {
         Set<ObjectId> uniqueIDs = new HashSet<>();
         for (com.capitalone.dashboard.model.Component comp : dbComponentRepository
                 .findAll()) {
@@ -161,8 +140,8 @@ public class HudsonCollectorTask extends CollectorTask<HudsonCollector> {
                 }
             }
         }
-        List<HudsonJob> stateChangeJobList = new ArrayList<>();
-        for (HudsonJob job : existingJobs) {
+        List<TeamcityJob> stateChangeJobList = new ArrayList<>();
+        for (TeamcityJob job : existingJobs) {
             if ((job.isEnabled() && !uniqueIDs.contains(job.getId())) ||  // if it was enabled but not on a dashboard
                     (!job.isEnabled() && uniqueIDs.contains(job.getId()))) { // OR it was disabled and now on a dashboard
                 job.setEnabled(uniqueIDs.contains(job.getId()));
@@ -170,7 +149,7 @@ public class HudsonCollectorTask extends CollectorTask<HudsonCollector> {
             }
         }
         if (!CollectionUtils.isEmpty(stateChangeJobList)) {
-            hudsonJobRepository.save(stateChangeJobList);
+            teamcityJobRepository.save(stateChangeJobList);
         }
     }
 
@@ -182,10 +161,10 @@ public class HudsonCollectorTask extends CollectorTask<HudsonCollector> {
      * @param activeServers
      * @param collector
      */
-    private void deleteUnwantedJobs(List<HudsonJob> activeJobs, List<HudsonJob> existingJobs, List<String> activeServers, HudsonCollector collector) {
+    private void deleteUnwantedJobs(List<TeamcityJob> activeJobs, List<TeamcityJob> existingJobs, List<String> activeServers, TeamcityCollector collector) {
 
-        List<HudsonJob> deleteJobList = new ArrayList<>();
-        for (HudsonJob job : existingJobs) {
+        List<TeamcityJob> deleteJobList = new ArrayList<>();
+        for (TeamcityJob job : existingJobs) {
             if (job.isPushed()) continue; // build servers that push jobs will not be in active servers list by design
 
             // if we have a collector item for the job in repository but it's build server is not what we collect, remove it.
@@ -205,40 +184,40 @@ public class HudsonCollectorTask extends CollectorTask<HudsonCollector> {
 
         }
         if (!CollectionUtils.isEmpty(deleteJobList)) {
-            hudsonJobRepository.delete(deleteJobList);
+            teamcityJobRepository.delete(deleteJobList);
         }
     }
 
     /**
      * Iterates over the enabled build jobs and adds new builds to the database.
      *
-     * @param enabledJobs list of enabled {@link HudsonJob}s
-     * @param dataByJob maps a {@link HudsonJob} to a map of data with {@link Build}s.
+     * @param enabledJobs list of enabled {@link TeamcityJob}s
+     * @param dataByJob maps a {@link TeamcityJob} to a map of data with {@link Build}s.
      */
-    private void addNewBuilds(List<HudsonJob> enabledJobs,
-                              Map<HudsonJob, Map<HudsonClient.jobData, Set<BaseModel>>> dataByJob) {
+    private void addNewBuilds(List<TeamcityJob> enabledJobs,
+                              Map<TeamcityJob, Map<TeamcityClient.jobData, Set<BaseModel>>> dataByJob) {
         long start = System.currentTimeMillis();
         int count = 0;
 
-        for (HudsonJob job : enabledJobs) {
+        for (TeamcityJob job : enabledJobs) {
             if (job.isPushed()) continue;
             // process new builds in the order of their build numbers - this has implication to handling of commits in BuildEventListener
 
-            Map<HudsonClient.jobData, Set<BaseModel>> jobDataSetMap = dataByJob.get(job);
+            Map<TeamcityClient.jobData, Set<BaseModel>> jobDataSetMap = dataByJob.get(job);
             if (jobDataSetMap == null) {
                 continue;
             }
-            Set<BaseModel> buildsSet = jobDataSetMap.get(HudsonClient.jobData.BUILD);
+            Set<BaseModel> buildsSet = jobDataSetMap.get(TeamcityClient.jobData.BUILD);
 
             ArrayList<BaseModel> builds = Lists.newArrayList(nullSafe(buildsSet));
 
             builds.sort(Comparator.comparingInt(b -> Integer.valueOf(((Build) b).getNumber())));
             for (BaseModel buildSummary : builds) {
                 if (isNewBuild(job, (Build)buildSummary)) {
-                    Build build = hudsonClient.getBuildDetails(((Build)buildSummary)
+                    Build build = teamcityClient.getBuildDetails(((Build)buildSummary)
                             .getBuildUrl(), job.getInstanceUrl());
                     job.setLastUpdated(System.currentTimeMillis());
-                    hudsonJobRepository.save(job);
+                    teamcityJobRepository.save(job);
                     if (build != null) {
                         build.setCollectorItemId(job.getId());
                         buildRepository.save(build);
@@ -250,20 +229,20 @@ public class HudsonCollectorTask extends CollectorTask<HudsonCollector> {
         log("New builds", start, count);
     }
 
-    private void addNewConfigs(List<HudsonJob> enabledJobs,
-                              Map<HudsonJob, Map<HudsonClient.jobData, Set<BaseModel>>> dataByJob) {
+    private void addNewConfigs(List<TeamcityJob> enabledJobs,
+                              Map<TeamcityJob, Map<TeamcityClient.jobData, Set<BaseModel>>> dataByJob) {
         long start = System.currentTimeMillis();
         int count = 0;
 
-        for (HudsonJob job : enabledJobs) {
+        for (TeamcityJob job : enabledJobs) {
             if (job.isPushed()) continue;
             // process new builds in the order of their build numbers - this has implication to handling of commits in BuildEventListener
 
-            Map<HudsonClient.jobData, Set<BaseModel>> jobDataSetMap = dataByJob.get(job);
+            Map<TeamcityClient.jobData, Set<BaseModel>> jobDataSetMap = dataByJob.get(job);
             if (jobDataSetMap == null) {
                 continue;
             }
-            Set<BaseModel> configsSet = jobDataSetMap.get(HudsonClient.jobData.CONFIG);
+            Set<BaseModel> configsSet = jobDataSetMap.get(TeamcityClient.jobData.CONFIG);
 
             ArrayList<BaseModel> configs = Lists.newArrayList(nullSafe(configsSet));
 
@@ -272,7 +251,7 @@ public class HudsonCollectorTask extends CollectorTask<HudsonCollector> {
             for (BaseModel config : configs) {
                 if (config != null && isNewConfig(job, (CollectorItemConfigHistory)config)) {
                     job.setLastUpdated(System.currentTimeMillis());
-                    hudsonJobRepository.save(job);
+                    teamcityJobRepository.save(job);
                     ((CollectorItemConfigHistory)config).setCollectorItemId(job.getId());
                     configRepository.save((CollectorItemConfigHistory)config);
                     count++;
@@ -287,19 +266,19 @@ public class HudsonCollectorTask extends CollectorTask<HudsonCollector> {
     }
 
     /**
-     * Adds new {@link HudsonJob}s to the database as disabled jobs.
+     * Adds new {@link TeamcityJob}s to the database as disabled jobs.
      *
-     * @param jobs         list of {@link HudsonJob}s
+     * @param jobs         list of {@link TeamcityJob}s
      * @param existingJobs
-     * @param collector    the {@link HudsonCollector}
+     * @param collector    the {@link TeamcityCollector}
      */
-    private void addNewJobs(Set<HudsonJob> jobs, List<HudsonJob> existingJobs, HudsonCollector collector) {
+    private void addNewJobs(Set<TeamcityJob> jobs, List<TeamcityJob> existingJobs, TeamcityCollector collector) {
         long start = System.currentTimeMillis();
         int count = 0;
 
-        List<HudsonJob> newJobs = new ArrayList<>();
-        for (HudsonJob job : jobs) {
-            HudsonJob existing = null;
+        List<TeamcityJob> newJobs = new ArrayList<>();
+        for (TeamcityJob job : jobs) {
+            TeamcityJob existing = null;
             if (!CollectionUtils.isEmpty(existingJobs) && (existingJobs.contains(job))) {
                 existing = existingJobs.get(existingJobs.indexOf(job));
             }
@@ -321,26 +300,26 @@ public class HudsonCollectorTask extends CollectorTask<HudsonCollector> {
             } else {
                 if (StringUtils.isEmpty(existing.getNiceName()) && StringUtils.isNotEmpty(niceName)) {
                     existing.setNiceName(niceName);
-                    hudsonJobRepository.save(existing);
+                    teamcityJobRepository.save(existing);
                 }
                 if (StringUtils.isEmpty(existing.getEnvironment()) && StringUtils.isNotEmpty(environment)) {
                     existing.setEnvironment(environment);
-                    hudsonJobRepository.save(existing);
+                    teamcityJobRepository.save(existing);
                 }
                 if (StringUtils.isEmpty(existing.getInstanceUrl())) {
                     existing.setInstanceUrl(job.getInstanceUrl());
-                    hudsonJobRepository.save(existing);
+                    teamcityJobRepository.save(existing);
                 }
             }
         }
         //save all in one shot
         if (!CollectionUtils.isEmpty(newJobs)) {
-            hudsonJobRepository.save(newJobs);
+            teamcityJobRepository.save(newJobs);
         }
         log("New jobs", start, count);
     }
 
-    private String getNiceName(HudsonJob job, HudsonCollector collector) {
+    private String getNiceName(TeamcityJob job, TeamcityCollector collector) {
         if (CollectionUtils.isEmpty(collector.getBuildServers())) return "";
         List<String> servers = collector.getBuildServers();
         List<String> niceNames = collector.getNiceNames();
@@ -353,7 +332,7 @@ public class HudsonCollectorTask extends CollectorTask<HudsonCollector> {
         return "";
     }
 
-    private String getEnvironment(HudsonJob job, HudsonCollector collector) {
+    private String getEnvironment(TeamcityJob job, TeamcityCollector collector) {
         if (CollectionUtils.isEmpty(collector.getBuildServers())) return "";
         List<String> servers = collector.getBuildServers();
         List<String> environments = collector.getEnvironments();
@@ -366,24 +345,24 @@ public class HudsonCollectorTask extends CollectorTask<HudsonCollector> {
         return "";
     }
 
-    private List<HudsonJob> enabledJobs(HudsonCollector collector,
-                                        String instanceUrl) {
-        return hudsonJobRepository.findEnabledJobs(collector.getId(),
+    private List<TeamcityJob> enabledJobs(TeamcityCollector collector,
+                                          String instanceUrl) {
+        return teamcityJobRepository.findEnabledJobs(collector.getId(),
                 instanceUrl);
     }
 
     @SuppressWarnings("unused")
-    private HudsonJob getExistingJob(HudsonCollector collector, HudsonJob job) {
-        return hudsonJobRepository.findJob(collector.getId(),
+    private TeamcityJob getExistingJob(TeamcityCollector collector, TeamcityJob job) {
+        return teamcityJobRepository.findJob(collector.getId(),
                 job.getInstanceUrl(), job.getJobName());
     }
 
-    private boolean isNewBuild(HudsonJob job, Build build) {
+    private boolean isNewBuild(TeamcityJob job, Build build) {
         return buildRepository.findByCollectorItemIdAndNumber(job.getId(),
                 build.getNumber()) == null;
     }
 
-    private boolean isNewConfig(HudsonJob job, CollectorItemConfigHistory config) {
+    private boolean isNewConfig(TeamcityJob job, CollectorItemConfigHistory config) {
         return configRepository.findByCollectorItemIdAndTimestamp(job.getId(),config.getTimestamp()) == null;
     }
 }

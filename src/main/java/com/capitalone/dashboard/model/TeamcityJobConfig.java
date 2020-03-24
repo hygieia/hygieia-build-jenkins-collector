@@ -3,7 +3,7 @@ package com.capitalone.dashboard.model;
 /**
  * CollectorItem extension to store the instance, build job and build url.
  */
-public class HudsonJobConfig extends CollectorItemConfigHistory {
+public class TeamcityJobConfig extends CollectorItemConfigHistory {
 
     protected static final String CURRENT_JOB_NAME = "currentName";
     protected static final String OLD_JOB_NAME = "oldName";

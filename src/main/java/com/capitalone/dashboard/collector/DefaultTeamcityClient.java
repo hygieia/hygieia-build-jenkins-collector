@@ -1,13 +1,6 @@
 package com.capitalone.dashboard.collector;
 
-import com.capitalone.dashboard.model.BaseModel;
-import com.capitalone.dashboard.model.Build;
-import com.capitalone.dashboard.model.BuildStatus;
-import com.capitalone.dashboard.model.ConfigHistOperationType;
-import com.capitalone.dashboard.model.HudsonJob;
-import com.capitalone.dashboard.model.HudsonJobConfig;
-import com.capitalone.dashboard.model.RepoBranch;
-import com.capitalone.dashboard.model.SCM;
+import com.capitalone.dashboard.model.*;
 import com.capitalone.dashboard.util.Supplier;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.collections.CollectionUtils;
@@ -28,180 +21,123 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestOperations;
 
 import java.io.UnsupportedEncodingException;
-import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.URL;
-import java.net.URLDecoder;
-import java.net.URLEncoder;
+import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.IntStream;
 
 
 /**
- * HudsonClient implementation that uses RestTemplate and JSONSimple to
- * fetch information from Hudson instances.
+ * TeamcityClient implementation that uses RestTemplate and JSONSimple to
+ * fetch information from Teamcity instances.
  */
 @Component
-public class DefaultHudsonClient implements HudsonClient {
-    private static final Logger LOG = LoggerFactory.getLogger(DefaultHudsonClient.class);
+public class DefaultTeamcityClient implements TeamcityClient {
+    private static final Logger LOG = LoggerFactory.getLogger(DefaultTeamcityClient.class);
 
     private final RestOperations rest;
-    private final HudsonSettings settings;
+    private final TeamcitySettings settings;
 
-    private static final String API_SUFFIX = "api/json?tree=";
-    //private static final String JOB_QUERY = "jobs[name,url,builds[number,url],lastSuccessfulBuild[timestamp,builtOn],lastBuild[timestamp,builtOn]]";
-    private static final String JOB_QUERY = "jobs[name,url,builds[number,url],lastSuccessfulBuild[timestamp,builtOn],lastBuild[timestamp,builtOn],actions[jobConfigHistory[currentName,date,hasConfig,job,oldName,operation,user,userID]]]";
+    private static final String API_SUFFIX = "app/rest/projects";
 
-    private static final String JOBS_URL_SUFFIX = "/api/json?tree=jobs";
-
-    private static final String[] CHANGE_SET_ITEMS_TREE = new String[]{
-            "user",
-            "author[fullName]",
-            "revision",
-            "id",
-            "msg",
-            "timestamp",
-            "date",
-            "paths[file]"
-    };
-
-    private static final String[] BUILD_DETAILS_TREE = new String[]{
-            "number",
-            "url",
-            "timestamp",
-            "duration",
-            "building",
-            "result",
-            "culprits[fullName]",
-            "changeSets[items[" + StringUtils.join(CHANGE_SET_ITEMS_TREE, ",") + "],kind]",
-            "changeSet[items[" + StringUtils.join(CHANGE_SET_ITEMS_TREE, ",") + "]",
-            "kind",
-            "revisions[module,revision]]",
-            "actions[lastBuiltRevision[SHA1,branch[SHA1,name]],remoteUrls]"
-    };
-
-    private static final String BUILD_DETAILS_URL_SUFFIX = "/api/json?tree=" + StringUtils.join(BUILD_DETAILS_TREE, ",");
+    private static final String BUILD_DETAILS_URL_SUFFIX = "app/rest/builds";
 
     private static final String DATE_FORMAT = "yyyy-MM-dd_HH-mm-ss";
 
     @Autowired
-    public DefaultHudsonClient(Supplier<RestOperations> restOperationsSupplier, HudsonSettings settings) {
+    public DefaultTeamcityClient(Supplier<RestOperations> restOperationsSupplier, TeamcitySettings settings) {
         this.rest = restOperationsSupplier.get();
         this.settings = settings;
     }
 
     @Override
-    public Map<HudsonJob, Map<jobData, Set<BaseModel>>> getInstanceJobs(String instanceUrl) {
+    public Map<TeamcityJob, Map<jobData, Set<BaseModel>>> getInstanceJobs(String instanceUrl) {
         LOG.debug("Enter getInstanceJobs");
-        //Map<HudsonJob, Set<Build>> result = new LinkedHashMap<>();
-        Map<HudsonJob, Map<jobData, Set<BaseModel>>> result = new LinkedHashMap<>();
-        
+        Map<TeamcityJob, Map<jobData, Set<BaseModel>>> result = new LinkedHashMap<>();
+
         int jobsCount = getJobsCount(instanceUrl);
         LOG.debug("Number of jobs " + jobsCount);
-        
+
         int i = 0, pageSize = settings.getPageSize();
         // Default pageSize to 1000 for backward compatibility of settings when pageSize defaults to 0
         if (pageSize <= 0) {
-        	pageSize = 1000;
+            pageSize = 1000;
         }
         while (i < jobsCount) {
-        	LOG.info("Fetching jobs " + i + "/" + jobsCount + " pageSize " + settings.getPageSize() + "...");
-        	
-	        try {
-                String url = joinURL(instanceUrl, new String[]{API_SUFFIX + buildJobQueryString() + URLEncoder.encode("{" + i + "," + (i + pageSize) + "}", "UTF-8")});
-	            ResponseEntity<String> responseEntity = makeRestCall(url);
-	            if (responseEntity == null) {
-	            	break;
-	            }
-	            String returnJSON = responseEntity.getBody();
-	            if (StringUtils.isEmpty(returnJSON)) {
-	            	break;	            	
-	            }
-	            JSONParser parser = new JSONParser();
-	            
-	            try {
-	                JSONObject object = (JSONObject) parser.parse(returnJSON);
-	                JSONArray jobs = getJsonArray(object, "jobs");
-	                if (jobs.size() == 0) {
-	                	break;
-	                }
-	                
-	                for (Object job : jobs) {
-	                    JSONObject jsonJob = (JSONObject) job;
-	
-	                    final String jobName = getString(jsonJob, "name");
-	                    final String jobURL = getString(jsonJob, "url");
-                        final String jobClass = getString(jsonJob, "_class");
+            LOG.info("Fetching jobs " + i + "/" + jobsCount + " pageSize " + settings.getPageSize() + "...");
 
-                        LOG.debug("Process jobName " + jobName + " jobURL " + jobURL + " jobClass " + jobClass);
+            try {
+                String url = joinURL(instanceUrl, new String[]{API_SUFFIX + URLEncoder.encode("{" + i + "," + (i + pageSize) + "}", "UTF-8")});
+                ResponseEntity<String> responseEntity = makeRestCall(url);
+                if (responseEntity == null) {
+                    break;
+                }
+                String returnJSON = responseEntity.getBody();
+                if (StringUtils.isEmpty(returnJSON)) {
+                    break;
+                }
+                JSONParser parser = new JSONParser();
 
-	                    recursiveGetJobDetails(jsonJob, jobName, jobURL, instanceUrl, parser, result);
-	                }
-	            } catch (ParseException e) {
-	                LOG.error("Parsing jobs details on instance: " + instanceUrl, e);
-	            }
-	        } catch (RestClientException rce) {
-	            LOG.error("client exception loading jobs details", rce);
-	            throw rce;
-	        } catch (UnsupportedEncodingException uee) {
-	        	LOG.error("unsupported encoding for loading jobs details", uee);
-			} catch (URISyntaxException e1) {
-			    LOG.error("wrong syntax url for loading jobs details", e1);
+                try {
+                    JSONObject object = (JSONObject) parser.parse(returnJSON);
+                    JSONArray jobs = getJsonArray(object, "project");
+                    if (jobs.size() == 0) {
+                        break;
+                    }
+
+                    for (Object job : jobs) {
+                        JSONObject jsonJob = (JSONObject) job;
+
+                        final String jobName = getString(jsonJob, "name");
+                        final String jobURL = getString(jsonJob, "webUrl");
+
+                        LOG.debug("Process jobName " + jobName + " jobURL " + jobURL);
+
+                        getJobDetails(jobName, jobURL, instanceUrl, parser, result);
+                    }
+                } catch (ParseException e) {
+                    LOG.error("Parsing jobs details on instance: " + instanceUrl, e);
+                }
+            } catch (RestClientException rce) {
+                LOG.error("client exception loading jobs details", rce);
+                throw rce;
+            } catch (UnsupportedEncodingException uee) {
+                LOG.error("unsupported encoding for loading jobs details", uee);
+            } catch (URISyntaxException e1) {
+                LOG.error("wrong syntax url for loading jobs details", e1);
             }
-	        
-	        i += pageSize;
+
+            i += pageSize;
         }
         return result;
     }
 
-    private String buildJobQueryString() {
-        StringBuilder query = new StringBuilder(JOB_QUERY);
-        int depth = settings.getFolderDepth();
-        IntStream.range(1, depth).forEach(i -> {
-            query.insert((query.length() - i), ",");
-            query.insert((query.length() - i), JOB_QUERY.substring(0, JOB_QUERY.length() - 1));
-            query.insert((query.length() - i), "]");
-        });
-        return query.toString();
-    }
-    
     /**
      * Get number of jobs first so that we don't get 500 internal server error when paging with index out of bounds.
      * TODO: We get the jobs JSON without details and then get the size of the array. Is there a better way to get number of jobs for paging?
-     * @param 		instanceUrl
-     * @return		number of jobs
+     *
+     * @param instanceUrl
+     * @return number of jobs
      */
     private int getJobsCount(String instanceUrl) {
-    	int result = 0;
-    	
-    	try {
-            String url = joinURL(instanceUrl, new String[]{JOBS_URL_SUFFIX});
+        int result = 0;
+
+        try {
+            String url = joinURL(instanceUrl, new String[]{API_SUFFIX});
             ResponseEntity<String> responseEntity = makeRestCall(url);
             if (responseEntity == null) {
-            	return result;
+                return result;
             }
             String returnJSON = responseEntity.getBody();
             if (StringUtils.isEmpty(returnJSON)) {
-            	return result;	            	
+                return result;
             }
-            JSONParser parser = new JSONParser();           
+            JSONParser parser = new JSONParser();
             try {
                 JSONObject object = (JSONObject) parser.parse(returnJSON);
-                JSONArray jobs = getJsonArray(object, "jobs");
+                JSONArray jobs = getJsonArray(object, "project");
                 result = jobs.size();
             } catch (ParseException e) {
                 LOG.error("Parsing jobs on instance: " + instanceUrl, e);
@@ -210,39 +146,102 @@ public class DefaultHudsonClient implements HudsonClient {
             LOG.error("client exception loading jobs", rce);
             throw rce;
         } catch (URISyntaxException e1) {
-        	LOG.error("wrong syntax url for loading jobs", e1);
-		}
-    	return result;
+            LOG.error("wrong syntax url for loading jobs", e1);
+        }
+        return result;
     }
 
-    @SuppressWarnings({"PMD.NPathComplexity","PMD.ExcessiveMethodLength","PMD.AvoidBranchingStatementAsLastInLoop","PMD.EmptyIfStmt"})
-    private void recursiveGetJobDetails(JSONObject jsonJob, String jobName, String jobURL, String instanceUrl, 
-            JSONParser parser, Map<HudsonJob, Map<jobData, Set<BaseModel>>> result) {
+    private void getJobDetails(String jobName, String jobURL, String instanceUrl,
+                               JSONParser parser, Map<TeamcityJob, Map<jobData, Set<BaseModel>>> result) {
+        Map<jobData, Set<BaseModel>> jobDataMap = new HashMap();
+
+        TeamcityJob teamcityJob = new TeamcityJob();
+        teamcityJob.setInstanceUrl(instanceUrl);
+        teamcityJob.setJobName(jobName);
+        teamcityJob.setJobUrl(jobURL);
+
+        try {
+            String url = joinURL(instanceUrl, new String[]{BUILD_DETAILS_URL_SUFFIX});
+            ResponseEntity<String> responseEntity = makeRestCall(url);
+            if (responseEntity == null) {
+                return;
+            }
+            String returnJSON = responseEntity.getBody();
+            if (StringUtils.isEmpty(returnJSON)) {
+                return;
+            }
+            try {
+                JSONObject object = (JSONObject) parser.parse(returnJSON);
+                JSONArray jsonBuilds = getJsonArray(object, "build");
+                Set<BaseModel> builds = new LinkedHashSet<>();
+                for (Object build : jsonBuilds) {
+                    JSONObject jsonBuild = (JSONObject) build;
+
+                    // A basic Build object. This will be fleshed out later if this is a new Build.
+                    String dockerLocalHostIP = settings.getDockerLocalHostIP();
+                    String buildNumber = jsonBuild.get("number").toString();
+                    LOG.debug(" buildNumber: " + buildNumber);
+                    if (!"0".equals(buildNumber)) {
+                        Build teamcityBuild = new Build();
+                        teamcityBuild.setNumber(buildNumber);
+                        String buildURL = getString(jsonBuild, "webUrl");
+
+                        //Modify localhost if Docker Natting is being done
+                        if (!dockerLocalHostIP.isEmpty()) {
+                            buildURL = buildURL.replace("localhost", dockerLocalHostIP);
+                            LOG.debug("Adding build & Updated URL to map LocalHost for Docker: " + buildURL);
+                        } else {
+                            LOG.debug(" Adding Build: " + buildURL);
+                        }
+
+                        teamcityBuild.setBuildUrl(buildURL);
+                        builds.add(teamcityBuild);
+                    }
+                }
+                jobDataMap.put(jobData.BUILD, builds);
+            } catch (ParseException e) {
+                LOG.error("Parsing jobs on instance: " + instanceUrl, e);
+            }
+        } catch (RestClientException rce) {
+            LOG.error("client exception loading jobs", rce);
+            throw rce;
+        } catch (URISyntaxException e1) {
+            LOG.error("wrong syntax url for loading jobs", e1);
+        }
+        if (jobDataMap.containsKey(jobData.BUILD) || jobDataMap.containsKey(jobData.CONFIG)) {
+            // add the builds and configs to the job
+            result.put(teamcityJob, jobDataMap);
+        }
+    }
+
+    @SuppressWarnings({"PMD.NPathComplexity", "PMD.ExcessiveMethodLength", "PMD.AvoidBranchingStatementAsLastInLoop", "PMD.EmptyIfStmt"})
+    private void recursiveGetJobDetails(JSONObject jsonJob, String jobName, String jobURL, String instanceUrl,
+                                        JSONParser parser, Map<TeamcityJob, Map<jobData, Set<BaseModel>>> result) {
         LOG.debug("recursiveGetJobDetails: jobName " + jobName + " jobURL: " + jobURL);
 
         Map<jobData, Set<BaseModel>> jobDataMap = new HashMap();
 
-        HudsonJob hudsonJob = new HudsonJob();
-        hudsonJob.setInstanceUrl(instanceUrl);
-        hudsonJob.setJobName(jobName);
-        hudsonJob.setJobUrl(jobURL);
+        TeamcityJob teamcityJob = new TeamcityJob();
+        teamcityJob.setInstanceUrl(instanceUrl);
+        teamcityJob.setJobName(jobName);
+        teamcityJob.setJobUrl(jobURL);
 
         JSONArray jsonBuilds = getJsonArray(jsonJob, "builds");
         if (!jsonBuilds.isEmpty()) {
-    
+
             Set<BaseModel> builds = new LinkedHashSet<>();
             for (Object build : jsonBuilds) {
                 JSONObject jsonBuild = (JSONObject) build;
-    
+
                 // A basic Build object. This will be fleshed out later if this is a new Build.
                 String dockerLocalHostIP = settings.getDockerLocalHostIP();
                 String buildNumber = jsonBuild.get("number").toString();
                 LOG.debug(" buildNumber: " + buildNumber);
                 if (!"0".equals(buildNumber)) {
-                    Build hudsonBuild = new Build();
-                    hudsonBuild.setNumber(buildNumber);
+                    Build teamcityBuild = new Build();
+                    teamcityBuild.setNumber(buildNumber);
                     String buildURL = getString(jsonBuild, "url");
-    
+
                     //Modify localhost if Docker Natting is being done
                     if (!dockerLocalHostIP.isEmpty()) {
                         buildURL = buildURL.replace("localhost", dockerLocalHostIP);
@@ -250,9 +249,9 @@ public class DefaultHudsonClient implements HudsonClient {
                     } else {
                         LOG.debug(" Adding Build: " + buildURL);
                     }
-    
-                    hudsonBuild.setBuildUrl(buildURL);
-                    builds.add(hudsonBuild);
+
+                    teamcityBuild.setBuildUrl(buildURL);
+                    builds.add(teamcityBuild);
                 }
             }
             jobDataMap.put(jobData.BUILD, builds);
@@ -271,18 +270,18 @@ public class DefaultHudsonClient implements HudsonClient {
                 for (Object config : jsonConfigs) {
                     JSONObject jsonConfig = (JSONObject) config;
 
-                    HudsonJobConfig hudsonConfig = new HudsonJobConfig();
-                    hudsonConfig.setCurrentJobName(getString(jsonConfig, "currentName"));
-                    hudsonConfig.setTimestamp(timestamp(jsonConfig, "date"));
-                    hudsonConfig.setHasConfig((getBoolean(jsonConfig, "hasConfig")));
-                    hudsonConfig.setJobUrl(getString(jsonConfig, "job"));
-                    hudsonConfig.setOldJobName(getString(jsonConfig, "oldName"));
-                    hudsonConfig.setOperation(ConfigHistOperationType.fromString(getString(jsonConfig, "operation")));
-                    hudsonConfig.setUserName(getString(jsonConfig, "user"));
-                    hudsonConfig.setUserID(getString(jsonConfig, "userID"));
-                    hudsonConfig.setJobUrl(jobURL);
+                    TeamcityJobConfig teamcityConfig = new TeamcityJobConfig();
+                    teamcityConfig.setCurrentJobName(getString(jsonConfig, "currentName"));
+                    teamcityConfig.setTimestamp(timestamp(jsonConfig, "date"));
+                    teamcityConfig.setHasConfig((getBoolean(jsonConfig, "hasConfig")));
+                    teamcityConfig.setJobUrl(getString(jsonConfig, "job"));
+                    teamcityConfig.setOldJobName(getString(jsonConfig, "oldName"));
+                    teamcityConfig.setOperation(ConfigHistOperationType.fromString(getString(jsonConfig, "operation")));
+                    teamcityConfig.setUserName(getString(jsonConfig, "user"));
+                    teamcityConfig.setUserID(getString(jsonConfig, "userID"));
+                    teamcityConfig.setJobUrl(jobURL);
 
-                    configs.add(hudsonConfig);
+                    configs.add(teamcityConfig);
                 }
                 jobDataMap.put(jobData.CONFIG, configs);
             }
@@ -290,7 +289,7 @@ public class DefaultHudsonClient implements HudsonClient {
 
         if (jobDataMap.containsKey(jobData.BUILD) || jobDataMap.containsKey(jobData.CONFIG)) {
             // add the builds and configs to the job
-            result.put(hudsonJob, jobDataMap);
+            result.put(teamcityJob, jobDataMap);
         }
 
         JSONArray subJobs = getJsonArray(jsonJob, "jobs");
@@ -334,27 +333,19 @@ public class DefaultHudsonClient implements HudsonClient {
                     if (settings.isSaveLog()) {
                         build.setLog(getLog(buildUrl));
                     }
-                    
+
                     //For git SCM, add the repoBranches. For other SCM types, it's handled while adding changesets
                     build.getCodeRepos().addAll(getGitRepoBranch(buildJson));
-                    
-                    boolean isPipelineJob = "org.jenkinsci.plugins.workflow.job.WorkflowRun".equals(getString(buildJson, "_class"));
-                    
+
+
                     // Need to handle duplicate changesets bug in Pipeline jobs (https://issues.jenkins-ci.org/browse/JENKINS-40352)
                     Set<String> commitIds = new HashSet<>();
                     // This is empty for git
                     Set<String> revisions = new HashSet<>();
-                    
-                    if (isPipelineJob) {
-                        for (Object changeSetObj : getJsonArray(buildJson, "changeSets")) {
-                            JSONObject changeSet = (JSONObject) changeSetObj;
-                            addChangeSet(build, changeSet, commitIds, revisions);
-                        }
-                    } else {
-                        JSONObject changeSet = (JSONObject) buildJson.get("changeSet");
-                        if (changeSet != null) {
-                            addChangeSet(build, changeSet, commitIds, revisions);
-                        }
+
+                    JSONObject changeSet = (JSONObject) buildJson.get("changeSet");
+                    if (changeSet != null) {
+                        addChangeSet(build, changeSet, commitIds, revisions);
                     }
                     return build;
                 }
@@ -382,10 +373,10 @@ public class DefaultHudsonClient implements HudsonClient {
         URL instanceUrl = new URL(server);
         String userInfo = instanceUrl.getUserInfo();
         String instanceProtocol = instanceUrl.getProtocol();
-	    
-	//decode to handle + in the job name.
-        String buildEscapeChar = build.replace("+","%2B");
-	    
+
+        //decode to handle + in the job name.
+        String buildEscapeChar = build.replace("+", "%2B");
+
         //decode to handle spaces in the job name.
         URL buildUrl = new URL(URLDecoder.decode(buildEscapeChar, "UTF-8"));
         String buildPath = buildUrl.getPath();
@@ -405,7 +396,7 @@ public class DefaultHudsonClient implements HudsonClient {
      * @param commitIds the commitIds
      * @param revisions the revisions
      */
-    private void addChangeSet(Build build, JSONObject changeSet, Set<String> commitIds, Set<String> revisions) {        
+    private void addChangeSet(Build build, JSONObject changeSet, Set<String> commitIds, Set<String> revisions) {
         String scmType = getString(changeSet, "kind");
         Map<String, RepoBranch> revisionToUrl = new HashMap<>();
 
@@ -438,7 +429,7 @@ public class DefaultHudsonClient implements HudsonClient {
                     scm.setScmUrl(repoBranch.getUrl());
                     scm.setScmBranch(repoBranch.getBranch());
                 }
-    
+
                 scm.setNumberOfChanges(getJsonArray(jsonItem, "paths").size());
                 build.getSourceChangeSet().add(scm);
                 commitIds.add(commitId);
@@ -454,76 +445,77 @@ public class DefaultHudsonClient implements HudsonClient {
 
     @SuppressWarnings("PMD")
     private List<RepoBranch> getGitRepoBranch(JSONObject buildJson) {
-        List<RepoBranch> list = new ArrayList<>();        
-        
+        List<RepoBranch> list = new ArrayList<>();
+
         JSONArray actions = getJsonArray(buildJson, "actions");
         for (Object action : actions) {
             JSONObject jsonAction = (JSONObject) action;
             if (jsonAction.size() > 0) {
                 JSONObject lastBuiltRevision = null;
                 JSONArray branches = null;
-                JSONArray remoteUrls = getJsonArray ((JSONObject) action, "remoteUrls");       
+                JSONArray remoteUrls = getJsonArray((JSONObject) action, "remoteUrls");
                 if (!remoteUrls.isEmpty()) {
-                	lastBuiltRevision = (JSONObject) jsonAction.get("lastBuiltRevision");
+                    lastBuiltRevision = (JSONObject) jsonAction.get("lastBuiltRevision");
                 }
                 if (lastBuiltRevision != null) {
-                	branches = getJsonArray (lastBuiltRevision, "branch");
+                    branches = getJsonArray(lastBuiltRevision, "branch");
                 }
                 // As of git plugin 3.0.0, when multiple repos are configured in the git plugin itself instead of MultiSCM plugin, 
-            	// they are stored unordered in a HashSet. So it's buggy and we cannot associate the correct branch information.
+                // they are stored unordered in a HashSet. So it's buggy and we cannot associate the correct branch information.
                 // So for now, we loop through all the remoteUrls and associate the built branch(es) with all of them.
                 if (branches != null && !branches.isEmpty()) {
-                	for (Object url : remoteUrls) {
-                		String sUrl = (String) url;
-                		if (sUrl != null && !sUrl.isEmpty()) {
-                			sUrl = removeGitExtensionFromUrl(sUrl);
-		                	for (Object branchObj : branches) {
-		                		String branchName = getString((JSONObject) branchObj, "name");
-		                		if (branchName != null) {
-		                			String unqualifiedBranchName = getUnqualifiedBranch(branchName);
-		                			RepoBranch grb = new RepoBranch(sUrl, unqualifiedBranchName, RepoBranch.RepoType.GIT);
-		                			list.add(grb);
-		                		}
-		                	}
-                		}
-                	}
+                    for (Object url : remoteUrls) {
+                        String sUrl = (String) url;
+                        if (sUrl != null && !sUrl.isEmpty()) {
+                            sUrl = removeGitExtensionFromUrl(sUrl);
+                            for (Object branchObj : branches) {
+                                String branchName = getString((JSONObject) branchObj, "name");
+                                if (branchName != null) {
+                                    String unqualifiedBranchName = getUnqualifiedBranch(branchName);
+                                    RepoBranch grb = new RepoBranch(sUrl, unqualifiedBranchName, RepoBranch.RepoType.GIT);
+                                    list.add(grb);
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
         return list;
     }
-    
+
     private String removeGitExtensionFromUrl(String url) {
-    	String sUrl = url;
-    	//remove .git from the urls
-    	if (sUrl.endsWith(".git")) {
+        String sUrl = url;
+        //remove .git from the urls
+        if (sUrl.endsWith(".git")) {
             sUrl = sUrl.substring(0, sUrl.lastIndexOf(".git"));
         }
-    	return sUrl;
+        return sUrl;
     }
-    
+
     /**
      * Gets the unqualified branch name given the qualified one of the following forms:
      * 1. refs/remotes/<remote name>/<branch name>
      * 2. remotes/<remote name>/<branch name>
      * 3. origin/<branch name>
      * 4. <branch name>
+     *
      * @param qualifiedBranch
      * @return the unqualified branch name
      */
-        
+
     private String getUnqualifiedBranch(String qualifiedBranch) {
-    	String branchName = qualifiedBranch;
-    	Pattern pattern = Pattern.compile("(refs/)?remotes/[^/]+/(.*)|(origin[0-9]*/)?(.*)");
-    	Matcher matcher = pattern.matcher(branchName);
-    	if(matcher.matches()) {
-    		if (matcher.group(2) != null) {
-    			branchName = matcher.group(2);
-    		} else if (matcher.group(4) != null) {
-    			branchName = matcher.group(4);
-    		}
-    	}
-    	return branchName;
+        String branchName = qualifiedBranch;
+        Pattern pattern = Pattern.compile("(refs/)?remotes/[^/]+/(.*)|(origin[0-9]*/)?(.*)");
+        Matcher matcher = pattern.matcher(branchName);
+        if (matcher.matches()) {
+            if (matcher.group(2) != null) {
+                branchName = matcher.group(2);
+            } else if (matcher.group(4) != null) {
+                branchName = matcher.group(4);
+            }
+        }
+        return branchName;
     }
 
     private long getCommitTimestamp(JSONObject jsonItem) {
@@ -610,7 +602,7 @@ public class DefaultHudsonClient implements HudsonClient {
                 return BuildStatus.Unknown;
         }
     }
-    
+
     @SuppressWarnings("PMD")
     protected ResponseEntity<String> makeRestCall(String sUrl) throws URISyntaxException {
         LOG.debug("Enter makeRestCall " + sUrl);
@@ -619,34 +611,34 @@ public class DefaultHudsonClient implements HudsonClient {
 
         //get userinfo from URI or settings (in spring properties)
         if (StringUtils.isEmpty(userInfo)) {
-        	List<String> servers = this.settings.getServers();
-        	List<String> usernames = this.settings.getUsernames();
-        	List<String> apiKeys = this.settings.getApiKeys();
-        	if (CollectionUtils.isNotEmpty(servers) && CollectionUtils.isNotEmpty(usernames) && CollectionUtils.isNotEmpty(apiKeys)) {
-        		boolean exactMatchFound = false;
-	        	for (int i = 0; i < servers.size(); i++) {
-	        		if ((servers.get(i) != null)) {
-	        			String domain1 = getDomain(sUrl);
-	        			String domain2 = getDomain(servers.get(i));
-	        			if (StringUtils.isNotEmpty(domain1) && StringUtils.isNotEmpty(domain2) && Objects.equals(domain1, domain2)
-	        					&& getPort(sUrl) == getPort(servers.get(i))) {
-	                		exactMatchFound = true;	
-	        			}
-	        			if (exactMatchFound && (i < usernames.size()) && (i < apiKeys.size()) 
-	        					&& (StringUtils.isNotEmpty(usernames.get(i))) && (StringUtils.isNotEmpty(apiKeys.get(i)))) {
-	        				userInfo = usernames.get(i) + ":" + apiKeys.get(i);
-        				}
-	        			if (exactMatchFound) {
-	        				break;
-	        			}
-	        		}
-	        	}	        	
-        		if (!exactMatchFound) {
-        			LOG.warn("Credentials for the following url was not found. This could happen if the domain/subdomain/IP address "
-        					+ "in the build url returned by Jenkins and the Jenkins instance url in your Hygieia configuration do not match: "
-        					+ "\"" + sUrl + "\"");
-        		}
-        	}
+            List<String> servers = this.settings.getServers();
+            List<String> usernames = this.settings.getUsernames();
+            List<String> apiKeys = this.settings.getApiKeys();
+            if (CollectionUtils.isNotEmpty(servers) && CollectionUtils.isNotEmpty(usernames) && CollectionUtils.isNotEmpty(apiKeys)) {
+                boolean exactMatchFound = false;
+                for (int i = 0; i < servers.size(); i++) {
+                    if ((servers.get(i) != null)) {
+                        String domain1 = getDomain(sUrl);
+                        String domain2 = getDomain(servers.get(i));
+                        if (StringUtils.isNotEmpty(domain1) && StringUtils.isNotEmpty(domain2) && Objects.equals(domain1, domain2)
+                                && getPort(sUrl) == getPort(servers.get(i))) {
+                            exactMatchFound = true;
+                        }
+                        if (exactMatchFound && (i < usernames.size()) && (i < apiKeys.size())
+                                && (StringUtils.isNotEmpty(usernames.get(i))) && (StringUtils.isNotEmpty(apiKeys.get(i)))) {
+                            userInfo = usernames.get(i) + ":" + apiKeys.get(i);
+                        }
+                        if (exactMatchFound) {
+                            break;
+                        }
+                    }
+                }
+                if (!exactMatchFound) {
+                    LOG.warn("Credentials for the following url was not found. This could happen if the domain/subdomain/IP address "
+                            + "in the build url returned by Jenkins and the Jenkins instance url in your Hygieia configuration do not match: "
+                            + "\"" + sUrl + "\"");
+                }
+            }
         }
         // Basic Auth only.
         if (StringUtils.isNotEmpty(userInfo)) {
@@ -659,12 +651,12 @@ public class DefaultHudsonClient implements HudsonClient {
         }
 
     }
-    
+
     private String getDomain(String url) throws URISyntaxException {
         URI uri = new URI(url);
         return uri.getHost();
     }
-    
+
     private int getPort(String url) throws URISyntaxException {
         URI uri = new URI(url);
         return uri.getPort();
@@ -684,8 +676,8 @@ public class DefaultHudsonClient implements HudsonClient {
         try {
             return makeRestCall(joinURL(buildUrl, new String[]{"consoleText"})).getBody();
         } catch (URISyntaxException e) {
-        	LOG.error("wrong syntax url for build log", e);
-		}
+            LOG.error("wrong syntax url for build log", e);
+        }
 
         return "";
     }

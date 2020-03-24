@@ -11,7 +11,7 @@ import java.util.Map;
 /**
  * Extension of Collector that stores current build server configuration.
  */
-public class HudsonCollector extends Collector {
+public class TeamcityCollector extends Collector {
     private List<String> buildServers = new ArrayList<>();
     private List<String> niceNames = new ArrayList<>();
     private List<String> environments = new ArrayList<>();
@@ -43,9 +43,9 @@ public class HudsonCollector extends Collector {
         this.buildServers = buildServers;
     }
 
-    public static HudsonCollector prototype(List<String> buildServers, List<String> niceNames,
-                                            List<String> environments) {
-        HudsonCollector protoType = new HudsonCollector();
+    public static TeamcityCollector prototype(List<String> buildServers, List<String> niceNames,
+                                              List<String> environments) {
+        TeamcityCollector protoType = new TeamcityCollector();
         protoType.setName("Hudson");
         protoType.setCollectorType(CollectorType.Build);
         protoType.setOnline(true);
@@ -58,13 +58,13 @@ public class HudsonCollector extends Collector {
             protoType.getEnvironments().addAll(environments);
         }
         Map<String, Object> options = new HashMap<>();
-        options.put(HudsonJob.INSTANCE_URL,"");
-        options.put(HudsonJob.JOB_URL,"");
-        options.put(HudsonJob.JOB_NAME,"");
+        options.put(TeamcityJob.INSTANCE_URL,"");
+        options.put(TeamcityJob.JOB_URL,"");
+        options.put(TeamcityJob.JOB_NAME,"");
 
         Map<String, Object> uniqueOptions = new HashMap<>();
-        uniqueOptions.put(HudsonJob.JOB_URL,"");
-        uniqueOptions.put(HudsonJob.JOB_NAME,"");
+        uniqueOptions.put(TeamcityJob.JOB_URL,"");
+        uniqueOptions.put(TeamcityJob.JOB_NAME,"");
 
         protoType.setAllFields(options);
         protoType.setUniqueFields(uniqueOptions);

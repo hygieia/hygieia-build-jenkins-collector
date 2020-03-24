@@ -1,18 +1,18 @@
 package com.capitalone.dashboard.collector;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- * Bean to hold settings specific to the Hudson collector.
+ * Bean to hold settings specific to the Teamcity collector.
  */
 @Component
-@ConfigurationProperties(prefix = "jenkins")
-public class HudsonSettings {
+@ConfigurationProperties(prefix = "teamcity")
+public class TeamcitySettings {
 
 	
     private String cron;
@@ -28,10 +28,10 @@ public class HudsonSettings {
     @Value("${folderDepth:10}")
     private int folderDepth;
 
-    @Value("${jenkins.connectTimeout:20000}")
+    @Value("${teamcity.connectTimeout:20000}")
     private int connectTimeout;
 
-    @Value("${jenkins.readTimeout:20000}")
+    @Value("${teamcity.readTimeout:20000}")
     private int readTimeout;
 
     public String getCron() {
@@ -95,7 +95,7 @@ public class HudsonSettings {
     }
 
     //Docker NATs the real host localhost to 10.0.2.2 when running in docker
-	//as localhost is stored in the JSON payload from jenkins we need
+	//as localhost is stored in the JSON payload from teamcity we need
 	//this hack to fix the addresses
     public String getDockerLocalHostIP() {
     	

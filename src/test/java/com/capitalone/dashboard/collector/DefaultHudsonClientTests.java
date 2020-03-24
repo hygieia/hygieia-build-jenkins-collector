@@ -1,9 +1,10 @@
 package com.capitalone.dashboard.collector;
+/*
 
 import com.capitalone.dashboard.model.BaseModel;
 import com.capitalone.dashboard.model.Build;
 import com.capitalone.dashboard.model.BuildStatus;
-import com.capitalone.dashboard.model.HudsonJob;
+import com.capitalone.dashboard.model.TeamcityJob;
 import com.capitalone.dashboard.model.RepoBranch;
 import com.capitalone.dashboard.model.RepoBranch.RepoType;
 import com.capitalone.dashboard.model.SCM;
@@ -47,9 +48,9 @@ public class DefaultHudsonClientTests {
 
     @Mock private Supplier<RestOperations> restOperationsSupplier;
     @Mock private RestOperations rest;
-    private HudsonSettings settings;
-    private HudsonClient hudsonClient;
-    private DefaultHudsonClient defaultHudsonClient;
+    private TeamcitySettings settings;
+    private TeamcityClient hudsonClient;
+    private DefaultTeamcityClient defaultHudsonClient;
 
     private static final String URL_TEST = "http://server/job/job2/2/";
     private static final int PAGE_SIZE = 10;
@@ -57,45 +58,45 @@ public class DefaultHudsonClientTests {
     @Before
     public void init() {
         when(restOperationsSupplier.get()).thenReturn(rest);
-        settings = new HudsonSettings();
+        settings = new TeamcitySettings();
         settings.setPageSize(PAGE_SIZE);
-        hudsonClient = defaultHudsonClient = new DefaultHudsonClient(restOperationsSupplier,
+        hudsonClient = defaultHudsonClient = new DefaultTeamcityClient(restOperationsSupplier,
                 settings);
     }
 
     @Test
     public void joinURLsTest() throws Exception {
-        String u = DefaultHudsonClient.joinURL("http://jenkins.com",
+        String u = DefaultTeamcityClient.joinURL("http://jenkins.com",
                 new String[]{"/api/json?tree=jobs[name,url,builds[number,url]]"});
         assertEquals("http://jenkins.com/api/json?tree=jobs[name,url,builds[number,url]]", u);
 
-        String u4 = DefaultHudsonClient.joinURL("http://jenkins.com/", new String[]{"test", "/api/json?tree=jobs[name,url,builds[number,url]]"});
+        String u4 = DefaultTeamcityClient.joinURL("http://jenkins.com/", new String[]{"test", "/api/json?tree=jobs[name,url,builds[number,url]]"});
         assertEquals("http://jenkins.com/test/api/json?tree=jobs[name,url,builds[number,url]]", u4);
 
-        String u2 = DefaultHudsonClient.joinURL("http://jenkins.com/", new String[]{"/test/", "/api/json?tree=jobs[name,url,builds[number,url]]"});
+        String u2 = DefaultTeamcityClient.joinURL("http://jenkins.com/", new String[]{"/test/", "/api/json?tree=jobs[name,url,builds[number,url]]"});
         assertEquals("http://jenkins.com/test/api/json?tree=jobs[name,url,builds[number,url]]", u2);
 
-        String u3 = DefaultHudsonClient.joinURL("http://jenkins.com", new String[]{"///test", "/api/json?tree=jobs[name,url,builds[number,url]]"});
+        String u3 = DefaultTeamcityClient.joinURL("http://jenkins.com", new String[]{"///test", "/api/json?tree=jobs[name,url,builds[number,url]]"});
         assertEquals("http://jenkins.com/test/api/json?tree=jobs[name,url,builds[number,url]]", u3);
     }
 
     @Test
     public void rebuildURLTest() throws Exception {
 
-        String u1 = DefaultHudsonClient.rebuildJobUrl("http://jenkins.com/job/job1", "https://123456:234567@jenkins.com");
+        String u1 = DefaultTeamcityClient.rebuildJobUrl("http://jenkins.com/job/job1", "https://123456:234567@jenkins.com");
         assertEquals("https://123456:234567@jenkins.com/job/job1", u1);
 
-        String u2 = DefaultHudsonClient.rebuildJobUrl("https://jenkins.com/job/job1", "https://123456:234567@jenkins.com");
+        String u2 = DefaultTeamcityClient.rebuildJobUrl("https://jenkins.com/job/job1", "https://123456:234567@jenkins.com");
         assertEquals("https://123456:234567@jenkins.com/job/job1", u2);
 
-        String u3 = DefaultHudsonClient.rebuildJobUrl("http://jenkins.com/job/job1", "http://123456:234567@jenkins.com");
+        String u3 = DefaultTeamcityClient.rebuildJobUrl("http://jenkins.com/job/job1", "http://123456:234567@jenkins.com");
         assertEquals("http://123456:234567@jenkins.com/job/job1", u3);
 
-        String u4 = DefaultHudsonClient.rebuildJobUrl("http://jenkins.com/job/job1", "http://123456:234567@jenkins.com");
+        String u4 = DefaultTeamcityClient.rebuildJobUrl("http://jenkins.com/job/job1", "http://123456:234567@jenkins.com");
         assertEquals("http://123456:234567@jenkins.com/job/job1", u4);
 
         String orig = "http://jenkins.com/job/job1%20with%20space";
-        String u5 = DefaultHudsonClient.rebuildJobUrl(orig, "http://jenkins.com");
+        String u5 = DefaultTeamcityClient.rebuildJobUrl(orig, "http://jenkins.com");
         assertEquals(orig, u5);
     }
 
@@ -178,7 +179,7 @@ public class DefaultHudsonClientTests {
         when(rest.exchange(Matchers.any(URI.class), eq(HttpMethod.GET), Matchers.any(HttpEntity.class), eq(String.class)))
                 .thenReturn(new ResponseEntity<>("", HttpStatus.OK));
 
-        Map<HudsonJob, Map<HudsonClient.jobData, Set<BaseModel>>> jobs = hudsonClient.getInstanceJobs(URL_TEST);
+        Map<TeamcityJob, Map<TeamcityClient.jobData, Set<BaseModel>>> jobs = hudsonClient.getInstanceJobs(URL_TEST);
 
         assertThat(jobs.size(), is(0));
     }
@@ -195,16 +196,16 @@ public class DefaultHudsonClientTests {
         		eq(HttpMethod.GET), Matchers.any(HttpEntity.class), eq(String.class)))
                 .thenReturn(new ResponseEntity<>("", HttpStatus.INTERNAL_SERVER_ERROR));
 
-        Map<HudsonJob, Map<HudsonClient.jobData, Set<BaseModel>>> jobs = hudsonClient.getInstanceJobs(URL_TEST);
+        Map<TeamcityJob, Map<TeamcityClient.jobData, Set<BaseModel>>> jobs = hudsonClient.getInstanceJobs(URL_TEST);
 
         assertThat(jobs.size(), is(2));
-        Iterator<HudsonJob> jobIt = jobs.keySet().iterator();
+        Iterator<TeamcityJob> jobIt = jobs.keySet().iterator();
 
         //First job
-        HudsonJob job = jobIt.next();
+        TeamcityJob job = jobIt.next();
         assertJob(job, "job1", "http://server/job/job1/");
 
-        Iterator<BaseModel> buildIt = jobs.get(job).get(HudsonClient.jobData.BUILD).iterator();
+        Iterator<BaseModel> buildIt = jobs.get(job).get(TeamcityClient.jobData.BUILD).iterator();
         assertBuild((Build)buildIt.next(),"2", "http://server/job/job1/2/");
         assertBuild((Build)buildIt.next(),"1", "http://server/job/job1/1/");
         assertThat(buildIt.hasNext(), is(false));
@@ -213,7 +214,7 @@ public class DefaultHudsonClientTests {
         job = jobIt.next();
         assertJob(job, "job2", "http://server/job/job2/");
 
-        buildIt = jobs.get(job).get(HudsonClient.jobData.BUILD).iterator();
+        buildIt = jobs.get(job).get(TeamcityClient.jobData.BUILD).iterator();
         assertBuild((Build)buildIt.next(),"2", "http://server/job/job2/2/");
         assertBuild((Build)buildIt.next(),"1", "http://server/job/job2/1/");
         assertThat(buildIt.hasNext(), is(false));
@@ -240,15 +241,15 @@ public class DefaultHudsonClientTests {
                             "}", "UTF-8"))), eq(HttpMethod.GET), Matchers.any(HttpEntity.class), eq(String.class))
         ).thenReturn(new ResponseEntity<>(getJson("instanceJobs_multibranchPipeline.json"), HttpStatus.OK));
 
-        Map<HudsonJob, Map<HudsonClient.jobData, Set<BaseModel>>> jobs = hudsonClient.getInstanceJobs(URL_TEST);
+        Map<TeamcityJob, Map<TeamcityClient.jobData, Set<BaseModel>>> jobs = hudsonClient.getInstanceJobs(URL_TEST);
         
         assertThat(jobs.size(), is(2));
-        Iterator<HudsonJob> jobIt = jobs.keySet().iterator();
+        Iterator<TeamcityJob> jobIt = jobs.keySet().iterator();
         
-        HudsonJob job = jobIt.next();
+        TeamcityJob job = jobIt.next();
         assertJob(job, "job1", "http://server/job/job1/");
 
-        Iterator<BaseModel> buildIt = jobs.get(job).get(HudsonClient.jobData.BUILD).iterator();
+        Iterator<BaseModel> buildIt = jobs.get(job).get(TeamcityClient.jobData.BUILD).iterator();
         assertBuild((Build)buildIt.next(),"2", "http://server/job/job1/2/");
         assertBuild((Build)buildIt.next(),"1", "http://server/job/job1/1/");
         assertThat(buildIt.hasNext(), is(false));
@@ -521,8 +522,9 @@ public class DefaultHudsonClientTests {
         return IOUtils.toString(inputStream);
     }
 
-    private void assertJob(HudsonJob job, String name, String url) {
+    private void assertJob(TeamcityJob job, String name, String url) {
         assertThat(job.getJobName(), is(name));
         assertThat(job.getJobUrl(), is(url));
     }
 }
+*/

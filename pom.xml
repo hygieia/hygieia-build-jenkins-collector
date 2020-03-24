@@ -3,7 +3,7 @@
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>com.capitalone.dashboard</groupId>
-  <artifactId>jenkins-build-collector</artifactId>
+  <artifactId>teamcity-build-collector</artifactId>
   <name>${project.groupId}:${project.artifactId}</name>
   <description>BuildCollector Microservice</description>
   <url>https://github.com/capitalone/Hygieia</url>

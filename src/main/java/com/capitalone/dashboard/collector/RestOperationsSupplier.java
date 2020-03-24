@@ -13,7 +13,7 @@ import org.springframework.web.client.RestTemplate;
 @Component
 public class RestOperationsSupplier implements Supplier<RestOperations> {
     @Autowired
-    HudsonSettings settings;
+    TeamcitySettings settings;
 
     @Override
     public RestOperations get() {

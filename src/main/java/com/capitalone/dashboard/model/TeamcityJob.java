@@ -3,7 +3,7 @@ package com.capitalone.dashboard.model;
 /**
  * CollectorItem extension to store the instance, build job and build url.
  */
-public class HudsonJob extends JobCollectorItem {
+public class TeamcityJob extends JobCollectorItem {
 
     @Override
     public boolean equals(Object o) {
@@ -14,7 +14,7 @@ public class HudsonJob extends JobCollectorItem {
         	return false;
         }
 
-        HudsonJob hudsonJob = (HudsonJob) o;
+        TeamcityJob hudsonJob = (TeamcityJob) o;
 
         return getJobUrl().equals(hudsonJob.getJobUrl()) && getJobName().equals(hudsonJob.getJobName());
     }
