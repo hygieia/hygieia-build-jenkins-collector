@@ -88,8 +88,8 @@ public class TeamcityCollectorTask extends CollectorTask<TeamcityCollector> {
         long start = System.currentTimeMillis();
         Set<ObjectId> udId = new HashSet<>();
         udId.add(collector.getId());
-        List<TeamcityJob> existingJobs = teamcityJobRepository.findByCollectorIdIn(udId);
-        List<TeamcityJob> activeJobs = new ArrayList<>();
+        List<TeamcityProject> existingJobs = teamcityJobRepository.findByCollectorIdIn(udId);
+        List<TeamcityProject> activeJobs = new ArrayList<>();
         List<String> activeServers = new ArrayList<>();
         activeServers.addAll(collector.getBuildServers());
 
@@ -98,8 +98,8 @@ public class TeamcityCollectorTask extends CollectorTask<TeamcityCollector> {
         for (String instanceUrl : collector.getBuildServers()) {
             logBanner(instanceUrl);
             try {
-                Map<TeamcityJob, Map<TeamcityClient.jobData, Set<BaseModel>>> dataByJob = teamcityClient
-                        .getInstanceJobs(instanceUrl);
+                Map<TeamcityProject, Map<TeamcityClient.jobData, Set<BaseModel>>> dataByJob = teamcityClient
+                        .getInstanceProjects(instanceUrl);
                 log("Fetched jobs", start);
                 activeJobs.addAll(dataByJob.keySet());
                 addNewJobs(dataByJob.keySet(), existingJobs, collector);
@@ -123,7 +123,7 @@ public class TeamcityCollectorTask extends CollectorTask<TeamcityCollector> {
      * @param existingJobs
      */
 
-    private void clean(TeamcityCollector collector, List<TeamcityJob> existingJobs) {
+    private void clean(TeamcityCollector collector, List<TeamcityProject> existingJobs) {
         Set<ObjectId> uniqueIDs = new HashSet<>();
         for (com.capitalone.dashboard.model.Component comp : dbComponentRepository
                 .findAll()) {
@@ -140,8 +140,8 @@ public class TeamcityCollectorTask extends CollectorTask<TeamcityCollector> {
                 }
             }
         }
-        List<TeamcityJob> stateChangeJobList = new ArrayList<>();
-        for (TeamcityJob job : existingJobs) {
+        List<TeamcityProject> stateChangeJobList = new ArrayList<>();
+        for (TeamcityProject job : existingJobs) {
             if ((job.isEnabled() && !uniqueIDs.contains(job.getId())) ||  // if it was enabled but not on a dashboard
                     (!job.isEnabled() && uniqueIDs.contains(job.getId()))) { // OR it was disabled and now on a dashboard
                 job.setEnabled(uniqueIDs.contains(job.getId()));
@@ -161,10 +161,10 @@ public class TeamcityCollectorTask extends CollectorTask<TeamcityCollector> {
      * @param activeServers
      * @param collector
      */
-    private void deleteUnwantedJobs(List<TeamcityJob> activeJobs, List<TeamcityJob> existingJobs, List<String> activeServers, TeamcityCollector collector) {
+    private void deleteUnwantedJobs(List<TeamcityProject> activeJobs, List<TeamcityProject> existingJobs, List<String> activeServers, TeamcityCollector collector) {
 
-        List<TeamcityJob> deleteJobList = new ArrayList<>();
-        for (TeamcityJob job : existingJobs) {
+        List<TeamcityProject> deleteJobList = new ArrayList<>();
+        for (TeamcityProject job : existingJobs) {
             if (job.isPushed()) continue; // build servers that push jobs will not be in active servers list by design
 
             // if we have a collector item for the job in repository but it's build server is not what we collect, remove it.
@@ -191,15 +191,15 @@ public class TeamcityCollectorTask extends CollectorTask<TeamcityCollector> {
     /**
      * Iterates over the enabled build jobs and adds new builds to the database.
      *
-     * @param enabledJobs list of enabled {@link TeamcityJob}s
-     * @param dataByJob maps a {@link TeamcityJob} to a map of data with {@link Build}s.
+     * @param enabledJobs list of enabled {@link TeamcityProject}s
+     * @param dataByJob maps a {@link TeamcityProject} to a map of data with {@link Build}s.
      */
-    private void addNewBuilds(List<TeamcityJob> enabledJobs,
-                              Map<TeamcityJob, Map<TeamcityClient.jobData, Set<BaseModel>>> dataByJob) {
+    private void addNewBuilds(List<TeamcityProject> enabledJobs,
+                              Map<TeamcityProject, Map<TeamcityClient.jobData, Set<BaseModel>>> dataByJob) {
         long start = System.currentTimeMillis();
         int count = 0;
 
-        for (TeamcityJob job : enabledJobs) {
+        for (TeamcityProject job : enabledJobs) {
             if (job.isPushed()) continue;
             // process new builds in the order of their build numbers - this has implication to handling of commits in BuildEventListener
 
@@ -229,12 +229,12 @@ public class TeamcityCollectorTask extends CollectorTask<TeamcityCollector> {
         log("New builds", start, count);
     }
 
-    private void addNewConfigs(List<TeamcityJob> enabledJobs,
-                              Map<TeamcityJob, Map<TeamcityClient.jobData, Set<BaseModel>>> dataByJob) {
+    private void addNewConfigs(List<TeamcityProject> enabledJobs,
+                              Map<TeamcityProject, Map<TeamcityClient.jobData, Set<BaseModel>>> dataByJob) {
         long start = System.currentTimeMillis();
         int count = 0;
 
-        for (TeamcityJob job : enabledJobs) {
+        for (TeamcityProject job : enabledJobs) {
             if (job.isPushed()) continue;
             // process new builds in the order of their build numbers - this has implication to handling of commits in BuildEventListener
 
@@ -266,19 +266,19 @@ public class TeamcityCollectorTask extends CollectorTask<TeamcityCollector> {
     }
 
     /**
-     * Adds new {@link TeamcityJob}s to the database as disabled jobs.
+     * Adds new {@link TeamcityProject}s to the database as disabled jobs.
      *
-     * @param jobs         list of {@link TeamcityJob}s
+     * @param jobs         list of {@link TeamcityProject}s
      * @param existingJobs
      * @param collector    the {@link TeamcityCollector}
      */
-    private void addNewJobs(Set<TeamcityJob> jobs, List<TeamcityJob> existingJobs, TeamcityCollector collector) {
+    private void addNewJobs(Set<TeamcityProject> jobs, List<TeamcityProject> existingJobs, TeamcityCollector collector) {
         long start = System.currentTimeMillis();
         int count = 0;
 
-        List<TeamcityJob> newJobs = new ArrayList<>();
-        for (TeamcityJob job : jobs) {
-            TeamcityJob existing = null;
+        List<TeamcityProject> newJobs = new ArrayList<>();
+        for (TeamcityProject job : jobs) {
+            TeamcityProject existing = null;
             if (!CollectionUtils.isEmpty(existingJobs) && (existingJobs.contains(job))) {
                 existing = existingJobs.get(existingJobs.indexOf(job));
             }
@@ -319,7 +319,7 @@ public class TeamcityCollectorTask extends CollectorTask<TeamcityCollector> {
         log("New jobs", start, count);
     }
 
-    private String getNiceName(TeamcityJob job, TeamcityCollector collector) {
+    private String getNiceName(TeamcityProject job, TeamcityCollector collector) {
         if (CollectionUtils.isEmpty(collector.getBuildServers())) return "";
         List<String> servers = collector.getBuildServers();
         List<String> niceNames = collector.getNiceNames();
@@ -332,7 +332,7 @@ public class TeamcityCollectorTask extends CollectorTask<TeamcityCollector> {
         return "";
     }
 
-    private String getEnvironment(TeamcityJob job, TeamcityCollector collector) {
+    private String getEnvironment(TeamcityProject job, TeamcityCollector collector) {
         if (CollectionUtils.isEmpty(collector.getBuildServers())) return "";
         List<String> servers = collector.getBuildServers();
         List<String> environments = collector.getEnvironments();
@@ -345,24 +345,24 @@ public class TeamcityCollectorTask extends CollectorTask<TeamcityCollector> {
         return "";
     }
 
-    private List<TeamcityJob> enabledJobs(TeamcityCollector collector,
-                                          String instanceUrl) {
+    private List<TeamcityProject> enabledJobs(TeamcityCollector collector,
+                                              String instanceUrl) {
         return teamcityJobRepository.findEnabledJobs(collector.getId(),
                 instanceUrl);
     }
 
     @SuppressWarnings("unused")
-    private TeamcityJob getExistingJob(TeamcityCollector collector, TeamcityJob job) {
+    private TeamcityProject getExistingJob(TeamcityCollector collector, TeamcityProject job) {
         return teamcityJobRepository.findJob(collector.getId(),
                 job.getInstanceUrl(), job.getJobName());
     }
 
-    private boolean isNewBuild(TeamcityJob job, Build build) {
+    private boolean isNewBuild(TeamcityProject job, Build build) {
         return buildRepository.findByCollectorItemIdAndNumber(job.getId(),
                 build.getNumber()) == null;
     }
 
-    private boolean isNewConfig(TeamcityJob job, CollectorItemConfigHistory config) {
+    private boolean isNewConfig(TeamcityProject job, CollectorItemConfigHistory config) {
         return configRepository.findByCollectorItemIdAndTimestamp(job.getId(),config.getTimestamp()) == null;
     }
 }

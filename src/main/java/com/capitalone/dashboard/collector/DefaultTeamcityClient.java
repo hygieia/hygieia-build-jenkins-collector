@@ -17,8 +17,11 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestOperations;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.UnsupportedEncodingException;
 import java.net.*;
@@ -40,7 +43,7 @@ public class DefaultTeamcityClient implements TeamcityClient {
     private final RestOperations rest;
     private final TeamcitySettings settings;
 
-    private static final String API_SUFFIX = "app/rest/projects";
+    private static final String PROJECT_API_URL_SUFFIX = "app/rest/projects";
 
     private static final String BUILD_DETAILS_URL_SUFFIX = "app/rest/builds";
 
@@ -53,23 +56,23 @@ public class DefaultTeamcityClient implements TeamcityClient {
     }
 
     @Override
-    public Map<TeamcityJob, Map<jobData, Set<BaseModel>>> getInstanceJobs(String instanceUrl) {
-        LOG.debug("Enter getInstanceJobs");
-        Map<TeamcityJob, Map<jobData, Set<BaseModel>>> result = new LinkedHashMap<>();
+    public Map<TeamcityProject, Map<jobData, Set<BaseModel>>> getInstanceProjects(String instanceUrl) {
+        LOG.debug("Enter getInstanceProjects");
+        Map<TeamcityProject, Map<jobData, Set<BaseModel>>> result = new LinkedHashMap<>();
 
-        int jobsCount = getJobsCount(instanceUrl);
-        LOG.debug("Number of jobs " + jobsCount);
+        int projectsCount = getProjectsCount(instanceUrl);
+        LOG.debug("Number of projects " + projectsCount);
 
         int i = 0, pageSize = settings.getPageSize();
         // Default pageSize to 1000 for backward compatibility of settings when pageSize defaults to 0
         if (pageSize <= 0) {
             pageSize = 1000;
         }
-        while (i < jobsCount) {
-            LOG.info("Fetching jobs " + i + "/" + jobsCount + " pageSize " + settings.getPageSize() + "...");
+        while (i < projectsCount) {
+            LOG.info("Fetching projects " + i + "/" + projectsCount + " pageSize " + settings.getPageSize() + "...");
 
             try {
-                String url = joinURL(instanceUrl, new String[]{API_SUFFIX + URLEncoder.encode("{" + i + "," + (i + pageSize) + "}", "UTF-8")});
+                String url = joinURL(instanceUrl, new String[]{PROJECT_API_URL_SUFFIX + URLEncoder.encode("{" + i + "," + (i + pageSize) + "}", "UTF-8")});
                 ResponseEntity<String> responseEntity = makeRestCall(url);
                 if (responseEntity == null) {
                     break;
@@ -90,12 +93,11 @@ public class DefaultTeamcityClient implements TeamcityClient {
                     for (Object job : jobs) {
                         JSONObject jsonJob = (JSONObject) job;
 
-                        final String jobName = getString(jsonJob, "name");
-                        final String jobURL = getString(jsonJob, "webUrl");
+                        final String projectName = getString(jsonJob, "name");
+                        final String projectURL = String.format("%s/%s?locator=project:%s", instanceUrl, PROJECT_API_URL_SUFFIX, projectName);
+                        LOG.debug("Process projectName " + projectName + " projectURL " + projectURL);
 
-                        LOG.debug("Process jobName " + jobName + " jobURL " + jobURL);
-
-                        getJobDetails(jobName, jobURL, instanceUrl, parser, result);
+                        getProjectDetails(projectName, projectURL, instanceUrl, result);
                     }
                 } catch (ParseException e) {
                     LOG.error("Parsing jobs details on instance: " + instanceUrl, e);
@@ -121,11 +123,11 @@ public class DefaultTeamcityClient implements TeamcityClient {
      * @param instanceUrl
      * @return number of jobs
      */
-    private int getJobsCount(String instanceUrl) {
+    private int getProjectsCount(String instanceUrl) {
         int result = 0;
 
         try {
-            String url = joinURL(instanceUrl, new String[]{API_SUFFIX});
+            String url = joinURL(instanceUrl, new String[]{PROJECT_API_URL_SUFFIX});
             ResponseEntity<String> responseEntity = makeRestCall(url);
             if (responseEntity == null) {
                 return result;
@@ -151,164 +153,80 @@ public class DefaultTeamcityClient implements TeamcityClient {
         return result;
     }
 
-    private void getJobDetails(String jobName, String jobURL, String instanceUrl,
-                               JSONParser parser, Map<TeamcityJob, Map<jobData, Set<BaseModel>>> result) {
-        Map<jobData, Set<BaseModel>> jobDataMap = new HashMap();
-
-        TeamcityJob teamcityJob = new TeamcityJob();
-        teamcityJob.setInstanceUrl(instanceUrl);
-        teamcityJob.setJobName(jobName);
-        teamcityJob.setJobUrl(jobURL);
-
-        try {
-            String url = joinURL(instanceUrl, new String[]{BUILD_DETAILS_URL_SUFFIX});
-            ResponseEntity<String> responseEntity = makeRestCall(url);
-            if (responseEntity == null) {
-                return;
-            }
-            String returnJSON = responseEntity.getBody();
-            if (StringUtils.isEmpty(returnJSON)) {
-                return;
-            }
-            try {
-                JSONObject object = (JSONObject) parser.parse(returnJSON);
-                JSONArray jsonBuilds = getJsonArray(object, "build");
-                Set<BaseModel> builds = new LinkedHashSet<>();
-                for (Object build : jsonBuilds) {
-                    JSONObject jsonBuild = (JSONObject) build;
-
-                    // A basic Build object. This will be fleshed out later if this is a new Build.
-                    String dockerLocalHostIP = settings.getDockerLocalHostIP();
-                    String buildNumber = jsonBuild.get("number").toString();
-                    LOG.debug(" buildNumber: " + buildNumber);
-                    if (!"0".equals(buildNumber)) {
-                        Build teamcityBuild = new Build();
-                        teamcityBuild.setNumber(buildNumber);
-                        String buildURL = getString(jsonBuild, "webUrl");
-
-                        //Modify localhost if Docker Natting is being done
-                        if (!dockerLocalHostIP.isEmpty()) {
-                            buildURL = buildURL.replace("localhost", dockerLocalHostIP);
-                            LOG.debug("Adding build & Updated URL to map LocalHost for Docker: " + buildURL);
-                        } else {
-                            LOG.debug(" Adding Build: " + buildURL);
-                        }
-
-                        teamcityBuild.setBuildUrl(buildURL);
-                        builds.add(teamcityBuild);
-                    }
-                }
-                jobDataMap.put(jobData.BUILD, builds);
-            } catch (ParseException e) {
-                LOG.error("Parsing jobs on instance: " + instanceUrl, e);
-            }
-        } catch (RestClientException rce) {
-            LOG.error("client exception loading jobs", rce);
-            throw rce;
-        } catch (URISyntaxException e1) {
-            LOG.error("wrong syntax url for loading jobs", e1);
-        }
-        if (jobDataMap.containsKey(jobData.BUILD) || jobDataMap.containsKey(jobData.CONFIG)) {
-            // add the builds and configs to the job
-            result.put(teamcityJob, jobDataMap);
-        }
-    }
-
     @SuppressWarnings({"PMD.NPathComplexity", "PMD.ExcessiveMethodLength", "PMD.AvoidBranchingStatementAsLastInLoop", "PMD.EmptyIfStmt"})
-    private void recursiveGetJobDetails(JSONObject jsonJob, String jobName, String jobURL, String instanceUrl,
-                                        JSONParser parser, Map<TeamcityJob, Map<jobData, Set<BaseModel>>> result) {
-        LOG.debug("recursiveGetJobDetails: jobName " + jobName + " jobURL: " + jobURL);
+    private void getProjectDetails(String projectName, String projectURL, String instanceUrl,
+                                   Map<TeamcityProject, Map<jobData, Set<BaseModel>>> result) throws URISyntaxException, ParseException {
+        LOG.debug("getProjectDetails: projectName " + projectName + " projectURL: " + projectURL);
 
         Map<jobData, Set<BaseModel>> jobDataMap = new HashMap();
 
-        TeamcityJob teamcityJob = new TeamcityJob();
-        teamcityJob.setInstanceUrl(instanceUrl);
-        teamcityJob.setJobName(jobName);
-        teamcityJob.setJobUrl(jobURL);
+        TeamcityProject teamcityProject = new TeamcityProject();
+        teamcityProject.setInstanceUrl(instanceUrl);
+        teamcityProject.setJobName(projectName);
+        teamcityProject.setJobUrl(projectURL);
 
-        JSONArray jsonBuilds = getJsonArray(jsonJob, "builds");
-        if (!jsonBuilds.isEmpty()) {
+        Set<BaseModel> builds = getBuildDetailsForTeamcityProject(projectName, instanceUrl);
 
-            Set<BaseModel> builds = new LinkedHashSet<>();
-            for (Object build : jsonBuilds) {
-                JSONObject jsonBuild = (JSONObject) build;
+        jobDataMap.put(jobData.BUILD, builds);
 
-                // A basic Build object. This will be fleshed out later if this is a new Build.
-                String dockerLocalHostIP = settings.getDockerLocalHostIP();
-                String buildNumber = jsonBuild.get("number").toString();
-                LOG.debug(" buildNumber: " + buildNumber);
-                if (!"0".equals(buildNumber)) {
-                    Build teamcityBuild = new Build();
-                    teamcityBuild.setNumber(buildNumber);
-                    String buildURL = getString(jsonBuild, "url");
-
-                    //Modify localhost if Docker Natting is being done
-                    if (!dockerLocalHostIP.isEmpty()) {
-                        buildURL = buildURL.replace("localhost", dockerLocalHostIP);
-                        LOG.debug("Adding build & Updated URL to map LocalHost for Docker: " + buildURL);
-                    } else {
-                        LOG.debug(" Adding Build: " + buildURL);
-                    }
-
-                    teamcityBuild.setBuildUrl(buildURL);
-                    builds.add(teamcityBuild);
-                }
-            }
-            jobDataMap.put(jobData.BUILD, builds);
-        }
-
-        JSONArray jsonActions = getJsonArray(jsonJob, "actions");
-        for (Object jsonAction : jsonActions) {
-            JSONObject jsonActionJob = (JSONObject) jsonAction;
-            JSONArray jsonConfigs = null;
-            if (jsonActionJob != null) {
-                jsonConfigs = getJsonArray(jsonActionJob, "jobConfigHistory");
-            }
-
-            if (jsonConfigs != null && jsonConfigs.size() > 0) {
-                Set<BaseModel> configs = new LinkedHashSet<>();
-                for (Object config : jsonConfigs) {
-                    JSONObject jsonConfig = (JSONObject) config;
-
-                    TeamcityJobConfig teamcityConfig = new TeamcityJobConfig();
-                    teamcityConfig.setCurrentJobName(getString(jsonConfig, "currentName"));
-                    teamcityConfig.setTimestamp(timestamp(jsonConfig, "date"));
-                    teamcityConfig.setHasConfig((getBoolean(jsonConfig, "hasConfig")));
-                    teamcityConfig.setJobUrl(getString(jsonConfig, "job"));
-                    teamcityConfig.setOldJobName(getString(jsonConfig, "oldName"));
-                    teamcityConfig.setOperation(ConfigHistOperationType.fromString(getString(jsonConfig, "operation")));
-                    teamcityConfig.setUserName(getString(jsonConfig, "user"));
-                    teamcityConfig.setUserID(getString(jsonConfig, "userID"));
-                    teamcityConfig.setJobUrl(jobURL);
-
-                    configs.add(teamcityConfig);
-                }
-                jobDataMap.put(jobData.CONFIG, configs);
-            }
-        }
-
-        if (jobDataMap.containsKey(jobData.BUILD) || jobDataMap.containsKey(jobData.CONFIG)) {
-            // add the builds and configs to the job
-            result.put(teamcityJob, jobDataMap);
-        }
-
-        JSONArray subJobs = getJsonArray(jsonJob, "jobs");
-
-        for (Object subJob : subJobs) {
-            // has sub-jobs (like Pipeline Multibranch project)
-            final String subJobName = getString((JSONObject) subJob, "name");
-            final String subJobURL = getString((JSONObject) subJob, "url");
-
-            JSONObject jsonSubJob = (JSONObject) subJob;
-            recursiveGetJobDetails(jsonSubJob, jobName + "/" + subJobName, subJobURL, instanceUrl, parser, result);
-        }
+        result.put(teamcityProject, jobDataMap);
     }
+
+
+    private Set<BaseModel> getBuildDetailsForTeamcityProjectPaginated(String projectName, String instanceUrl, int pageNum) throws URISyntaxException, ParseException {
+        String allBuildsUrl = joinURL(instanceUrl, new String[]{BUILD_DETAILS_URL_SUFFIX});
+        LOG.info("Fetching builds for project {}, page {}", allBuildsUrl, pageNum);
+        MultiValueMap<String, String> extraQueryParams = new LinkedMultiValueMap<>();
+
+        extraQueryParams.put("locator", Collections.singletonList(String.format("project:%s", projectName)));
+        ResponseEntity<String> responseEntity = makeRestCall(allBuildsUrl, pageNum, 100, extraQueryParams);
+        String returnJSON = responseEntity.getBody();
+        if (StringUtils.isEmpty(returnJSON)) {
+            return Collections.emptySet();
+        }
+        JSONParser parser = new JSONParser();
+        JSONObject object = (JSONObject) parser.parse(returnJSON);
+
+        if (object.isEmpty()) {
+            return Collections.emptySet();
+        }
+        JSONArray jsonBuilds = getJsonArray(object, "build");
+        Set<BaseModel> builds = new LinkedHashSet<>();
+        for (Object build : jsonBuilds) {
+            JSONObject jsonBuild = (JSONObject) build;
+            // A basic Build object. This will be fleshed out later if this is a new Build.
+            String buildNumber = jsonBuild.get("id").toString();
+            LOG.debug(" buildNumber: " + buildNumber);
+            Build teamcityBuild = new Build();
+            teamcityBuild.setNumber(buildNumber);
+            String buildURL = String.format("%s?locator=id:%s", allBuildsUrl, buildNumber); //String buildURL = getString(jsonBuild, "webUrl");
+            LOG.debug(" Adding Build: " + buildURL);
+            teamcityBuild.setBuildUrl(buildURL);
+            builds.add(teamcityBuild);
+        }
+        return builds;
+
+    }
+
+    private Set<BaseModel> getBuildDetailsForTeamcityProject(String projectName, String instanceUrl) throws URISyntaxException, ParseException {
+        Set<BaseModel> allBuilds = new LinkedHashSet<>();
+        int nextPage = 1;
+        while (true) {
+            Set<BaseModel> builds = getBuildDetailsForTeamcityProjectPaginated(projectName, instanceUrl, nextPage);
+            if (builds.isEmpty()) {
+                break;
+            }
+            allBuilds.addAll(builds);
+            ++nextPage;
+        }
+        return allBuilds;
+    }
+
 
     @Override
     public Build getBuildDetails(String buildUrl, String instanceUrl) {
         try {
-            String newUrl = rebuildJobUrl(buildUrl, instanceUrl);
-            String url = joinURL(newUrl, new String[]{BUILD_DETAILS_URL_SUFFIX});
+            String url = rebuildJobUrl(buildUrl, instanceUrl);
             ResponseEntity<String> result = makeRestCall(url);
             String resultJSON = result.getBody();
             if (StringUtils.isEmpty(resultJSON)) {
@@ -318,18 +236,15 @@ public class DefaultTeamcityClient implements TeamcityClient {
             JSONParser parser = new JSONParser();
             try {
                 JSONObject buildJson = (JSONObject) parser.parse(resultJSON);
-                Boolean building = (Boolean) buildJson.get("building");
+                Boolean building = (Boolean) buildJson.get("build");
                 // Ignore jobs that are building
                 if (!building) {
                     Build build = new Build();
-                    build.setNumber(buildJson.get("number").toString());
+                    build.setNumber(buildJson.get("id").toString());
                     build.setBuildUrl(buildUrl);
                     build.setTimestamp(System.currentTimeMillis());
-                    build.setStartTime((Long) buildJson.get("timestamp"));
-                    build.setDuration((Long) buildJson.get("duration"));
                     build.setEndTime(build.getStartTime() + build.getDuration());
                     build.setBuildStatus(getBuildStatus(buildJson));
-                    build.setStartedBy(firstCulprit(buildJson));
                     if (settings.isSaveLog()) {
                         build.setLog(getLog(buildUrl));
                     }
@@ -588,7 +503,7 @@ public class DefaultTeamcityClient implements TeamcityClient {
     }
 
     private BuildStatus getBuildStatus(JSONObject buildJson) {
-        String status = buildJson.get("result").toString();
+        String status = buildJson.get("status").toString();
         switch (status) {
             case "SUCCESS":
                 return BuildStatus.Success;
@@ -602,6 +517,21 @@ public class DefaultTeamcityClient implements TeamcityClient {
                 return BuildStatus.Unknown;
         }
     }
+
+    private ResponseEntity<String> makeRestCall(String sUrl, int pageNum, int pageSize, MultiValueMap<String, String> extraQueryParams) {
+        LOG.debug("Enter makeRestCall " + sUrl);
+        UriComponentsBuilder thisuri =
+                UriComponentsBuilder.fromHttpUrl(sUrl)
+                        .queryParam("per_page", pageSize)
+                        .queryParam("page", pageNum)
+                        .queryParams(extraQueryParams);
+
+        return rest.exchange(thisuri.toUriString(), HttpMethod.GET,
+                null,
+                String.class);
+
+    }
+
 
     @SuppressWarnings("PMD")
     protected ResponseEntity<String> makeRestCall(String sUrl) throws URISyntaxException {

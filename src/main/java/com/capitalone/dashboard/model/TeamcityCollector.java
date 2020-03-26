@@ -58,13 +58,13 @@ public class TeamcityCollector extends Collector {
             protoType.getEnvironments().addAll(environments);
         }
         Map<String, Object> options = new HashMap<>();
-        options.put(TeamcityJob.INSTANCE_URL,"");
-        options.put(TeamcityJob.JOB_URL,"");
-        options.put(TeamcityJob.JOB_NAME,"");
+        options.put(TeamcityProject.INSTANCE_URL,"");
+        options.put(TeamcityProject.JOB_URL,"");
+        options.put(TeamcityProject.JOB_NAME,"");
 
         Map<String, Object> uniqueOptions = new HashMap<>();
-        uniqueOptions.put(TeamcityJob.JOB_URL,"");
-        uniqueOptions.put(TeamcityJob.JOB_NAME,"");
+        uniqueOptions.put(TeamcityProject.JOB_URL,"");
+        uniqueOptions.put(TeamcityProject.JOB_NAME,"");
 
         protoType.setAllFields(options);
         protoType.setUniqueFields(uniqueOptions);

@@ -2,7 +2,7 @@ package com.capitalone.dashboard.collector;
 
 import com.capitalone.dashboard.model.BaseModel;
 import com.capitalone.dashboard.model.Build;
-import com.capitalone.dashboard.model.TeamcityJob;
+import com.capitalone.dashboard.model.TeamcityProject;
 
 import java.util.Map;
 import java.util.Set;
@@ -22,7 +22,7 @@ public interface TeamcityClient {
      * @param instanceUrl the URL for the Teamcity instance
      * @return a summary of every build for each job on the instance
      */
-    Map<TeamcityJob, Map<TeamcityClient.jobData, Set<BaseModel>>> getInstanceJobs(String instanceUrl);
+    Map<TeamcityProject, Map<TeamcityClient.jobData, Set<BaseModel>>> getInstanceProjects(String instanceUrl);
 
     /**
      * Fetch full populated build information for a build.
