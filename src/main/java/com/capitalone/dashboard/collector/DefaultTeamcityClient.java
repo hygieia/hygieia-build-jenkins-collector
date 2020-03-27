@@ -520,14 +520,18 @@ public class DefaultTeamcityClient implements TeamcityClient {
 
     private ResponseEntity<String> makeRestCall(String sUrl, int pageNum, int pageSize, MultiValueMap<String, String> extraQueryParams) {
         LOG.debug("Enter makeRestCall " + sUrl);
+        URI someUri = URI.create(sUrl);
         UriComponentsBuilder thisuri =
                 UriComponentsBuilder.fromHttpUrl(sUrl)
                         .queryParam("per_page", pageSize)
                         .queryParam("page", pageNum)
                         .queryParams(extraQueryParams);
 
+        String userInfo = someUri.getUserInfo();
+
+
         return rest.exchange(thisuri.toUriString(), HttpMethod.GET,
-                null,
+            new HttpEntity<>(createHeaders(userInfo)),
                 String.class);
 
     }
