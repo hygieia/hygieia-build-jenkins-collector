@@ -69,10 +69,17 @@ public class DefaultTeamcityClient implements TeamcityClient {
             pageSize = 1000;
         }
         while (i < projectsCount) {
-            LOG.info("Fetching projects " + i + "/" + projectsCount + " pageSize " + settings.getPageSize() + "...");
+            LOG.info("Fetching projects " + i + "/" + projectsCount + " pageSize " + settings.getPageSize() + "currentProjectNo." + i + "...");
+
+            if(projectsCount - i < 1000) {
+                pageSize = projectsCount % 1000;
+            }
 
             try {
-                String url = joinURL(instanceUrl, new String[]{PROJECT_API_URL_SUFFIX + URLEncoder.encode("{" + i + "," + (i + pageSize) + "}", "UTF-8")});
+//                String url = joinURL(instanceUrl, new String[]{PROJECT_API_URL_SUFFIX + URLEncoder.encode("{" + i + "," + (i + pageSize) + "}", "UTF-8")});
+                String url = joinURL(instanceUrl, new String[]{PROJECT_API_URL_SUFFIX + "?locator=count:" + pageSize + ",start:" + i });
+                System.out.println("urlllll");
+                System.out.println(url);
                 ResponseEntity<String> responseEntity = makeRestCall(url);
                 if (responseEntity == null) {
                     break;
@@ -105,8 +112,6 @@ public class DefaultTeamcityClient implements TeamcityClient {
             } catch (RestClientException rce) {
                 LOG.error("client exception loading jobs details", rce);
                 throw rce;
-            } catch (UnsupportedEncodingException uee) {
-                LOG.error("unsupported encoding for loading jobs details", uee);
             } catch (URISyntaxException e1) {
                 LOG.error("wrong syntax url for loading jobs details", e1);
             }
@@ -375,7 +380,7 @@ public class DefaultTeamcityClient implements TeamcityClient {
                 if (lastBuiltRevision != null) {
                     branches = getJsonArray(lastBuiltRevision, "branch");
                 }
-                // As of git plugin 3.0.0, when multiple repos are configured in the git plugin itself instead of MultiSCM plugin, 
+                // As of git plugin 3.0.0, when multiple repos are configured in the git plugin itself instead of MultiSCM plugin,
                 // they are stored unordered in a HashSet. So it's buggy and we cannot associate the correct branch information.
                 // So for now, we loop through all the remoteUrls and associate the built branch(es) with all of them.
                 if (branches != null && !branches.isEmpty()) {
