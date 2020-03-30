@@ -17,11 +17,9 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestOperations;
-import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.UnsupportedEncodingException;
 import java.net.*;
@@ -69,17 +67,14 @@ public class DefaultTeamcityClient implements TeamcityClient {
             pageSize = 1000;
         }
         while (i < projectsCount) {
-            LOG.info("Fetching projects " + i + "/" + projectsCount + " pageSize " + settings.getPageSize() + "currentProjectNo." + i + "...");
+            LOG.info("Fetching projects " + i + "/" + projectsCount + " pageSize " + settings.getPageSize() + "currentPageNo." + i + "...");
 
-            if(projectsCount - i < 1000) {
+            if (projectsCount - i < 1000) {
                 pageSize = projectsCount % 1000;
             }
 
             try {
-//                String url = joinURL(instanceUrl, new String[]{PROJECT_API_URL_SUFFIX + URLEncoder.encode("{" + i + "," + (i + pageSize) + "}", "UTF-8")});
-                String url = joinURL(instanceUrl, new String[]{PROJECT_API_URL_SUFFIX + "?locator=count:" + pageSize + ",start:" + i });
-                System.out.println("urlllll");
-                System.out.println(url);
+                String url = joinURL(instanceUrl, new String[]{PROJECT_API_URL_SUFFIX + "?locator=count:" + pageSize + ",start:" + i});
                 ResponseEntity<String> responseEntity = makeRestCall(url);
                 if (responseEntity == null) {
                     break;
@@ -100,11 +95,11 @@ public class DefaultTeamcityClient implements TeamcityClient {
                     for (Object job : jobs) {
                         JSONObject jsonJob = (JSONObject) job;
 
-                        final String projectName = getString(jsonJob, "name");
-                        final String projectURL = String.format("%s/%s?locator=project:%s", instanceUrl, PROJECT_API_URL_SUFFIX, projectName);
-                        LOG.debug("Process projectName " + projectName + " projectURL " + projectURL);
+                        final String projectID = getString(jsonJob, "id");
+                        final String projectURL = String.format("%s/%s?locator=project:%s", instanceUrl, PROJECT_API_URL_SUFFIX, projectID);
+                        LOG.debug("Process projectID " + projectID + " projectURL " + projectURL);
 
-                        getProjectDetails(projectName, projectURL, instanceUrl, result);
+                        getProjectDetails(projectID, projectURL, instanceUrl, result);
                     }
                 } catch (ParseException e) {
                     LOG.error("Parsing jobs details on instance: " + instanceUrl, e);
@@ -159,18 +154,18 @@ public class DefaultTeamcityClient implements TeamcityClient {
     }
 
     @SuppressWarnings({"PMD.NPathComplexity", "PMD.ExcessiveMethodLength", "PMD.AvoidBranchingStatementAsLastInLoop", "PMD.EmptyIfStmt"})
-    private void getProjectDetails(String projectName, String projectURL, String instanceUrl,
+    private void getProjectDetails(String projectID, String projectURL, String instanceUrl,
                                    Map<TeamcityProject, Map<jobData, Set<BaseModel>>> result) throws URISyntaxException, ParseException {
-        LOG.debug("getProjectDetails: projectName " + projectName + " projectURL: " + projectURL);
+        LOG.debug("getProjectDetails: projectID " + projectID + " projectURL: " + projectURL);
 
         Map<jobData, Set<BaseModel>> jobDataMap = new HashMap();
 
         TeamcityProject teamcityProject = new TeamcityProject();
         teamcityProject.setInstanceUrl(instanceUrl);
-        teamcityProject.setJobName(projectName);
+        teamcityProject.setJobName(projectID);
         teamcityProject.setJobUrl(projectURL);
 
-        Set<BaseModel> builds = getBuildDetailsForTeamcityProject(projectName, instanceUrl);
+        Set<BaseModel> builds = getBuildDetailsForTeamcityProject(projectID, instanceUrl);
 
         jobDataMap.put(jobData.BUILD, builds);
 
@@ -178,51 +173,57 @@ public class DefaultTeamcityClient implements TeamcityClient {
     }
 
 
-    private Set<BaseModel> getBuildDetailsForTeamcityProjectPaginated(String projectName, String instanceUrl, int pageNum) throws URISyntaxException, ParseException {
-        String allBuildsUrl = joinURL(instanceUrl, new String[]{BUILD_DETAILS_URL_SUFFIX});
-        LOG.info("Fetching builds for project {}, page {}", allBuildsUrl, pageNum);
-        MultiValueMap<String, String> extraQueryParams = new LinkedMultiValueMap<>();
-
-        extraQueryParams.put("locator", Collections.singletonList(String.format("project:%s", projectName)));
-        ResponseEntity<String> responseEntity = makeRestCall(allBuildsUrl, pageNum, 100, extraQueryParams);
-        String returnJSON = responseEntity.getBody();
-        if (StringUtils.isEmpty(returnJSON)) {
-            return Collections.emptySet();
-        }
-        JSONParser parser = new JSONParser();
-        JSONObject object = (JSONObject) parser.parse(returnJSON);
-
-        if (object.isEmpty()) {
-            return Collections.emptySet();
-        }
-        JSONArray jsonBuilds = getJsonArray(object, "build");
+    private Set<BaseModel> getBuildDetailsForTeamcityProjectPaginated(String projectID, String instanceUrl, int startCount, int endCount) throws URISyntaxException, ParseException {
         Set<BaseModel> builds = new LinkedHashSet<>();
-        for (Object build : jsonBuilds) {
-            JSONObject jsonBuild = (JSONObject) build;
-            // A basic Build object. This will be fleshed out later if this is a new Build.
-            String buildNumber = jsonBuild.get("id").toString();
-            LOG.debug(" buildNumber: " + buildNumber);
-            Build teamcityBuild = new Build();
-            teamcityBuild.setNumber(buildNumber);
-            String buildURL = String.format("%s?locator=id:%s", allBuildsUrl, buildNumber); //String buildURL = getString(jsonBuild, "webUrl");
-            LOG.debug(" Adding Build: " + buildURL);
-            teamcityBuild.setBuildUrl(buildURL);
-            builds.add(teamcityBuild);
+
+        try {
+            String allBuildsUrl = joinURL(instanceUrl, new String[]{BUILD_DETAILS_URL_SUFFIX});
+            LOG.info("Fetching builds for project {}", allBuildsUrl);
+            String url = joinURL(allBuildsUrl, new String[]{String.format("?locator=project:%s,count:%d,start:%d", projectID, endCount, startCount)});
+            ResponseEntity<String> responseEntity = makeRestCall(url);
+            String returnJSON = responseEntity.getBody();
+            if (StringUtils.isEmpty(returnJSON)) {
+                return Collections.emptySet();
+            }
+            JSONParser parser = new JSONParser();
+            JSONObject object = (JSONObject) parser.parse(returnJSON);
+
+            if (object.isEmpty()) {
+                return Collections.emptySet();
+            }
+            JSONArray jsonBuilds = getJsonArray(object, "build");
+            for (Object build : jsonBuilds) {
+                JSONObject jsonBuild = (JSONObject) build;
+                // A basic Build object. This will be fleshed out later if this is a new Build.
+                String buildNumber = jsonBuild.get("id").toString();
+                LOG.debug(" buildNumber: " + buildNumber);
+                Build teamcityBuild = new Build();
+                teamcityBuild.setNumber(buildNumber);
+                String buildURL = String.format("%s?locator=id:%s", allBuildsUrl, buildNumber); //String buildURL = getString(jsonBuild, "webUrl");
+                LOG.debug(" Adding Build: " + buildURL);
+                teamcityBuild.setBuildUrl(buildURL);
+                builds.add(teamcityBuild);
+            }
+        } catch (HttpClientErrorException hce) {
+            return builds;
         }
+
         return builds;
 
     }
 
-    private Set<BaseModel> getBuildDetailsForTeamcityProject(String projectName, String instanceUrl) throws URISyntaxException, ParseException {
+    private Set<BaseModel> getBuildDetailsForTeamcityProject(String projectID, String instanceUrl) throws URISyntaxException, ParseException {
         Set<BaseModel> allBuilds = new LinkedHashSet<>();
-        int nextPage = 1;
+        int startCount = 0;
+        int endCount = 100;
         while (true) {
-            Set<BaseModel> builds = getBuildDetailsForTeamcityProjectPaginated(projectName, instanceUrl, nextPage);
+            Set<BaseModel> builds = getBuildDetailsForTeamcityProjectPaginated(projectID, instanceUrl, startCount, endCount);
             if (builds.isEmpty()) {
                 break;
             }
             allBuilds.addAll(builds);
-            ++nextPage;
+            startCount = endCount + 1;
+            endCount = endCount + 100;
         }
         return allBuilds;
     }
@@ -522,25 +523,6 @@ public class DefaultTeamcityClient implements TeamcityClient {
                 return BuildStatus.Unknown;
         }
     }
-
-    private ResponseEntity<String> makeRestCall(String sUrl, int pageNum, int pageSize, MultiValueMap<String, String> extraQueryParams) {
-        LOG.debug("Enter makeRestCall " + sUrl);
-        URI someUri = URI.create(sUrl);
-        UriComponentsBuilder thisuri =
-                UriComponentsBuilder.fromHttpUrl(sUrl)
-                        .queryParam("per_page", pageSize)
-                        .queryParam("page", pageNum)
-                        .queryParams(extraQueryParams);
-
-        String userInfo = someUri.getUserInfo();
-
-
-        return rest.exchange(thisuri.toUriString(), HttpMethod.GET,
-            new HttpEntity<>(createHeaders(userInfo)),
-                String.class);
-
-    }
-
 
     @SuppressWarnings("PMD")
     protected ResponseEntity<String> makeRestCall(String sUrl) throws URISyntaxException {
