@@ -61,7 +61,7 @@ public class DefaultTeamcityClient implements TeamcityClient {
         int projectsCount = getProjectsCount(instanceUrl);
         LOG.debug("Number of projects " + projectsCount);
 
-        int i = 0, pageSize = settings.getPageSize();
+        int i = 0, pageSize = settings.getPageSize(), currentProject = 0;
         // Default pageSize to 1000 for backward compatibility of settings when pageSize defaults to 0
         if (pageSize <= 0) {
             pageSize = 1000;
@@ -98,8 +98,9 @@ public class DefaultTeamcityClient implements TeamcityClient {
                         final String projectID = getString(jsonJob, "id");
                         final String projectURL = String.format("%s/%s?locator=project:%s", instanceUrl, PROJECT_API_URL_SUFFIX, projectID);
                         LOG.debug("Process projectID " + projectID + " projectURL " + projectURL);
-
+                        LOG.debug("currentProjectNo" + currentProject);
                         getProjectDetails(projectID, projectURL, instanceUrl, result);
+                        currentProject++;
                     }
                 } catch (ParseException e) {
                     LOG.error("Parsing jobs details on instance: " + instanceUrl, e);
@@ -222,8 +223,8 @@ public class DefaultTeamcityClient implements TeamcityClient {
                 break;
             }
             allBuilds.addAll(builds);
-            startCount = endCount + 1;
-            endCount = endCount + 100;
+            startCount += 100;
+//            endCount = endCount + 100;
         }
         return allBuilds;
     }
