@@ -5,6 +5,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -24,7 +25,7 @@ public class TeamcitySettings {
     private List<String> usernames = new ArrayList<>();
     private List<String> apiKeys = new ArrayList<>();
     private String dockerLocalHostIP; //null if not running in docker on http://localhost
-    private int pageSize;
+    private String projectIds = "";
     @Value("${folderDepth:10}")
     private int folderDepth;
 
@@ -106,14 +107,14 @@ public class TeamcitySettings {
     	}
         return localHostOverride;
     }
-    
-    public void setPageSize(int pageSize) {
-		this.pageSize = pageSize;
-	}
-    
-    public int getPageSize() {
-		return pageSize;
-	}
+
+    public void setProjectIds(String projectIds) {
+        this.projectIds = projectIds;
+    }
+
+    public List<String> getProjectIds() {
+        return Arrays.asList(projectIds.split(","));
+    }
 
     public void setFolderDepth(int folderDepth) {
         this.folderDepth = folderDepth;

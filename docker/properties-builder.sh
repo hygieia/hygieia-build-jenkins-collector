@@ -75,17 +75,17 @@ dbpassword=${HYGIEIA_API_ENV_SPRING_DATA_MONGODB_PASSWORD:-dbpassword}
 #Collector schedule (required)
 teamcity.cron=${TEAMCITY_CRON:-0 0/5 * * * *}
 
-#The page size
-teamcity.pageSize=${TEAMCITY_PAGE_SIZE:-1000}
+#A comma seperated list of teamcity projectids
+teamcity.projectIds=${TEAMCITY_PROJECT_IDS}
 
 # The folder depth - default is 10
 teamcity.folderDepth=${TEAMCITY_FOLDER_DEPTH:-10}
 
-#Jenkins server (required) - Can provide multiple
+#Teamcity server (required) - Can provide multiple
 #teamcity.servers[0]=http://teamcity.company.com
-#teamcity.niceNames[0]=[YourJenkins]
+#teamcity.niceNames[0]=[YourTeamcity]
 #teamcity.environments[0]=[DEV,QA,INT,PERF,PROD]
-#Another option: If using same username/password Jenkins auth - set username/apiKey to use HTTP Basic Auth (blank=no auth)
+#Another option: If using same username/password Teamcity auth - set username/apiKey to use HTTP Basic Auth (blank=no auth)
 #teamcity.usernames[0]=user
 #teamcity.apiKeys[0]=12345
 

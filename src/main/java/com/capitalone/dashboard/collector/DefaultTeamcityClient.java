@@ -61,25 +61,9 @@ public class DefaultTeamcityClient implements TeamcityClient {
     public Map<TeamcityProject, Map<jobData, Set<BaseModel>>> getInstanceProjects(String instanceUrl) {
         LOG.debug("Enter getInstanceProjects");
         Map<TeamcityProject, Map<jobData, Set<BaseModel>>> result = new LinkedHashMap<>();
-
-        int projectsCount = getProjectsCount(instanceUrl);
-//        int projectsCount = 1;
-        LOG.debug("Number of projects " + projectsCount);
-
-        int i = 0, pageSize = settings.getPageSize(), currentProject = 0;
-        // Default pageSize to 1000 for backward compatibility of settings when pageSize defaults to 0
-        if (pageSize <= 0) {
-            pageSize = 1000;
-        }
-        while (i < projectsCount) {
-            LOG.info("Fetching projects " + i + "/" + projectsCount + " pageSize " + settings.getPageSize() + "currentPageNo." + i + "...");
-
-            if (projectsCount - i < 1000) {
-                pageSize = projectsCount % 1000;
-            }
-
+        for (String projectID : settings.getProjectIds()) {
             try {
-                String url = joinURL(instanceUrl, new String[]{PROJECT_API_URL_SUFFIX + "?locator=count:" + pageSize + ",start:" + i});
+                String url = joinURL(instanceUrl, new String[]{PROJECT_API_URL_SUFFIX + "/id:" + projectID});
                 ResponseEntity<String> responseEntity = makeRestCall(url);
                 if (responseEntity == null) {
                     break;
@@ -89,24 +73,20 @@ public class DefaultTeamcityClient implements TeamcityClient {
                     break;
                 }
                 JSONParser parser = new JSONParser();
-
                 try {
                     JSONObject object = (JSONObject) parser.parse(returnJSON);
                     JSONArray jobs = getJsonArray(object, "project");
                     if (jobs.size() == 0) {
                         break;
                     }
-
                     for (Object job : jobs) {
                         JSONObject jsonJob = (JSONObject) job;
 
-                        final String projectID = getString(jsonJob, "id");
-//                        final String projectID = "NgppUi_DisplayPlanManagerUi_BuildPipeline";
-                        final String projectURL = String.format("%s/%s?locator=project:%s", instanceUrl, PROJECT_API_URL_SUFFIX, projectID);
-                        LOG.debug("Process projectID " + projectID + " projectURL " + projectURL);
-                        LOG.debug("currentProjectNo" + currentProject);
-                        getProjectDetails(projectID, projectURL, instanceUrl, result);
-                        currentProject++;
+                        final String projectName = getString(jsonJob, "name");
+                        final String projectURL = String.format("%s/%s/id:%s", instanceUrl, PROJECT_API_URL_SUFFIX, projectID);
+                        LOG.debug("Process projectName " + projectName + " projectURL " + projectURL);
+
+                        getProjectDetails(projectID, projectName, projectURL, instanceUrl, result);
                     }
                 } catch (ParseException e) {
                     LOG.error("Parsing jobs details on instance: " + instanceUrl, e);
@@ -117,52 +97,12 @@ public class DefaultTeamcityClient implements TeamcityClient {
             } catch (URISyntaxException e1) {
                 LOG.error("wrong syntax url for loading jobs details", e1);
             }
-
-            i += pageSize;
-        }
-        LOG.debug("getInstanceProjects completed    ");
-        return result;
-    }
-
-    /**
-     * Get number of jobs first so that we don't get 500 internal server error when paging with index out of bounds.
-     * TODO: We get the jobs JSON without details and then get the size of the array. Is there a better way to get number of jobs for paging?
-     *
-     * @param instanceUrl
-     * @return number of jobs
-     */
-    private int getProjectsCount(String instanceUrl) {
-        int result = 0;
-
-        try {
-            String url = joinURL(instanceUrl, new String[]{PROJECT_API_URL_SUFFIX});
-            ResponseEntity<String> responseEntity = makeRestCall(url);
-            if (responseEntity == null) {
-                return result;
-            }
-            String returnJSON = responseEntity.getBody();
-            if (StringUtils.isEmpty(returnJSON)) {
-                return result;
-            }
-            JSONParser parser = new JSONParser();
-            try {
-                JSONObject object = (JSONObject) parser.parse(returnJSON);
-                JSONArray jobs = getJsonArray(object, "project");
-                result = jobs.size();
-            } catch (ParseException e) {
-                LOG.error("Parsing jobs on instance: " + instanceUrl, e);
-            }
-        } catch (RestClientException rce) {
-            LOG.error("client exception loading jobs", rce);
-            throw rce;
-        } catch (URISyntaxException e1) {
-            LOG.error("wrong syntax url for loading jobs", e1);
         }
         return result;
     }
 
     @SuppressWarnings({"PMD.NPathComplexity", "PMD.ExcessiveMethodLength", "PMD.AvoidBranchingStatementAsLastInLoop", "PMD.EmptyIfStmt"})
-    private void getProjectDetails(String projectID, String projectURL, String instanceUrl,
+    private void getProjectDetails(String projectID, String projectName, String projectURL, String instanceUrl,
                                    Map<TeamcityProject, Map<jobData, Set<BaseModel>>> result) throws URISyntaxException, ParseException {
         LOG.debug("getProjectDetails: projectID " + projectID + " projectURL: " + projectURL);
 
@@ -170,8 +110,9 @@ public class DefaultTeamcityClient implements TeamcityClient {
 
         TeamcityProject teamcityProject = new TeamcityProject();
         teamcityProject.setInstanceUrl(instanceUrl);
-        teamcityProject.setJobName(projectID);
+        teamcityProject.setJobName(projectName);
         teamcityProject.setJobUrl(projectURL);
+        teamcityProject.getOptions().put("projectId", projectID);
 
         Set<BaseModel> builds = getBuildDetailsForTeamcityProject(projectID, instanceUrl);
 
@@ -183,7 +124,6 @@ public class DefaultTeamcityClient implements TeamcityClient {
 
     private Set<BaseModel> getBuildDetailsForTeamcityProjectPaginated(String projectID, String instanceUrl, int startCount, int endCount) throws URISyntaxException, ParseException {
         Set<BaseModel> builds = new LinkedHashSet<>();
-
         try {
             String allBuildsUrl = joinURL(instanceUrl, new String[]{BUILD_DETAILS_URL_SUFFIX});
             LOG.info("Fetching builds for project {}", allBuildsUrl);
@@ -203,13 +143,15 @@ public class DefaultTeamcityClient implements TeamcityClient {
             for (Object build : jsonBuilds) {
                 JSONObject jsonBuild = (JSONObject) build;
                 // A basic Build object. This will be fleshed out later if this is a new Build.
-                String buildNumber = jsonBuild.get("id").toString();
+                String buildID = jsonBuild.get("id").toString();
+                String buildNumber = jsonBuild.get("number").toString();
                 LOG.debug(" buildNumber: " + buildNumber);
                 Build teamcityBuild = new Build();
                 teamcityBuild.setNumber(buildNumber);
-                String buildURL = String.format("%s?locator=id:%s", allBuildsUrl, buildNumber); //String buildURL = getString(jsonBuild, "webUrl");
+                String buildURL = String.format("%s?locator=id:%s", allBuildsUrl, buildID); //String buildURL = getString(jsonBuild, "webUrl");
                 LOG.debug(" Adding Build: " + buildURL);
                 teamcityBuild.setBuildUrl(buildURL);
+                teamcityBuild.setBuildStatus(getBuildStatus(jsonBuild));
                 builds.add(teamcityBuild);
             }
         } catch (HttpClientErrorException hce) {
