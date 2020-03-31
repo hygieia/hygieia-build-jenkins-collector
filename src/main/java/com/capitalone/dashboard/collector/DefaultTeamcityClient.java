@@ -20,11 +20,15 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestOperations;
+import sun.rmi.runtime.Log;
 
 import java.io.UnsupportedEncodingException;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -114,6 +118,7 @@ public class DefaultTeamcityClient implements TeamcityClient {
 
             i += pageSize;
         }
+        LOG.debug("getInstanceProjects completed    ");
         return result;
     }
 
@@ -232,8 +237,12 @@ public class DefaultTeamcityClient implements TeamcityClient {
 
     @Override
     public Build getBuildDetails(String buildUrl, String instanceUrl) {
+        String formattedBuildUrl = formatBuildUrl(buildUrl);
+
         try {
-            String url = rebuildJobUrl(buildUrl, instanceUrl);
+            LOG.debug("buildUrl: " + buildUrl);
+            LOG.debug("formattedBuildUrl: " + formattedBuildUrl);
+            String url = rebuildJobUrl(formattedBuildUrl, instanceUrl);
             ResponseEntity<String> result = makeRestCall(url);
             String resultJSON = result.getBody();
             if (StringUtils.isEmpty(resultJSON)) {
@@ -243,18 +252,21 @@ public class DefaultTeamcityClient implements TeamcityClient {
             JSONParser parser = new JSONParser();
             try {
                 JSONObject buildJson = (JSONObject) parser.parse(resultJSON);
-                Boolean building = (Boolean) buildJson.get("build");
+//                JSONObject buildDetails = (JSONObject) ((JSONArray) buildJson.get("build")).get(0);
+                String buildStatus = buildJson.get("state").toString();
                 // Ignore jobs that are building
-                if (!building) {
+                if (buildStatus != "finished") {
                     Build build = new Build();
+                    long startTime = getTimeInMillis(buildJson.get("startDate").toString());
+                    long endTime = getTimeInMillis(buildJson.get("finishDate").toString());
+                    long duration = endTime - startTime;
                     build.setNumber(buildJson.get("id").toString());
-                    build.setBuildUrl(buildUrl);
+                    build.setBuildUrl(formattedBuildUrl);
                     build.setTimestamp(System.currentTimeMillis());
-                    build.setEndTime(build.getStartTime() + build.getDuration());
+                    build.setStartTime(startTime);
+                    build.setEndTime(endTime);
+                    build.setDuration(duration);
                     build.setBuildStatus(getBuildStatus(buildJson));
-                    if (settings.isSaveLog()) {
-                        build.setLog(getLog(buildUrl));
-                    }
 
                     //For git SCM, add the repoBranches. For other SCM types, it's handled while adding changesets
                     build.getCodeRepos().addAll(getGitRepoBranch(buildJson));
@@ -273,20 +285,36 @@ public class DefaultTeamcityClient implements TeamcityClient {
                 }
 
             } catch (ParseException e) {
-                LOG.error("Parsing build: " + buildUrl, e);
+                LOG.error("Parsing build: " + formattedBuildUrl, e);
             }
         } catch (RestClientException rce) {
-            LOG.error("Client exception loading build details: " + rce.getMessage() + ". URL =" + buildUrl);
+            LOG.error("Client exception loading build details: " + rce.getMessage() + ". URL =" + formattedBuildUrl);
         } catch (MalformedURLException mfe) {
-            LOG.error("Malformed url for loading build details" + mfe.getMessage() + ". URL =" + buildUrl);
+            LOG.error("Malformed url for loading build details" + mfe.getMessage() + ". URL =" + formattedBuildUrl);
         } catch (URISyntaxException use) {
-            LOG.error("Uri syntax exception for loading build details" + use.getMessage() + ". URL =" + buildUrl);
+            LOG.error("Uri syntax exception for loading build details" + use.getMessage() + ". URL =" + formattedBuildUrl);
         } catch (RuntimeException re) {
-            LOG.error("Unknown error in getting build details. URL=" + buildUrl, re);
+            LOG.error("Unknown error in getting build details. URL=" + formattedBuildUrl, re);
         } catch (UnsupportedEncodingException unse) {
-            LOG.error("Unsupported Encoding Exception in getting build details. URL=" + buildUrl, unse);
+            LOG.error("Unsupported Encoding Exception in getting build details. URL=" + formattedBuildUrl, unse);
         }
+        LOG.debug("finished build");
         return null;
+    }
+
+    private long getTimeInMillis(String startDate) {
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss");
+        String dateWithoutOffset = startDate.substring(0,15);
+        String offset = startDate.substring(15);
+        LocalDateTime formattedDateTime = LocalDateTime.parse(dateWithoutOffset, formatter);
+        String formattedOffset = offset.substring(0,3) + ":" + offset.substring(3);
+        ZoneOffset zoneOffset = ZoneOffset.of(formattedOffset);
+        return formattedDateTime.atOffset(zoneOffset).toEpochSecond();
+    }
+
+    //to get all the details (time, started, end)
+    private String formatBuildUrl(String buildUrl) {
+       return buildUrl.split("\\?")[0] + "/" + buildUrl.split("=")[1];
     }
 
     //This method will rebuild the API endpoint because the buildUrl obtained via Jenkins API
@@ -564,10 +592,13 @@ public class DefaultTeamcityClient implements TeamcityClient {
         }
         // Basic Auth only.
         if (StringUtils.isNotEmpty(userInfo)) {
+            LOG.debug("make rest call with headers");
+            LOG.debug("hitting url:" + thisuri);
             return rest.exchange(thisuri, HttpMethod.GET,
                     new HttpEntity<>(createHeaders(userInfo)),
                     String.class);
         } else {
+            LOG.debug("make rest call without headers");
             return rest.exchange(thisuri, HttpMethod.GET, null,
                     String.class);
         }
@@ -594,15 +625,6 @@ public class DefaultTeamcityClient implements TeamcityClient {
         return headers;
     }
 
-    protected String getLog(String buildUrl) {
-        try {
-            return makeRestCall(joinURL(buildUrl, new String[]{"consoleText"})).getBody();
-        } catch (URISyntaxException e) {
-            LOG.error("wrong syntax url for build log", e);
-        }
-
-        return "";
-    }
 
     // join a base url to another path or paths - this will handle trailing or non-trailing /'s
     public static String joinURL(String base, String[] paths) {

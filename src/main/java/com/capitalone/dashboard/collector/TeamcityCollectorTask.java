@@ -5,6 +5,8 @@ import com.capitalone.dashboard.model.*;
 import com.capitalone.dashboard.repository.*;
 import com.google.common.collect.Lists;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.TaskScheduler;
@@ -16,12 +18,12 @@ import java.util.*;
 
 
 /**
- * CollectorTask that fetches Build information from Hudson
+ * CollectorTask that fetches Build information from TeamCity
  */
 @Component
 public class TeamcityCollectorTask extends CollectorTask<TeamcityCollector> {
     @SuppressWarnings("PMD.UnusedPrivateField")
-//    private static final Log LOG = LogFactory.getLog(HudsonCollectorTask.class);
+    private static final Log LOG = LogFactory.getLog(TeamcityCollectorTask.class);
 
     private final TeamcityCollectorRepository teamcityCollectorRepository;
     private final TeamcityJobRepository teamcityJobRepository;
