@@ -63,6 +63,7 @@ public class DefaultTeamcityClient implements TeamcityClient {
         Map<TeamcityProject, Map<jobData, Set<BaseModel>>> result = new LinkedHashMap<>();
 
         int projectsCount = getProjectsCount(instanceUrl);
+//        int projectsCount = 1;
         LOG.debug("Number of projects " + projectsCount);
 
         int i = 0, pageSize = settings.getPageSize(), currentProject = 0;
@@ -100,6 +101,7 @@ public class DefaultTeamcityClient implements TeamcityClient {
                         JSONObject jsonJob = (JSONObject) job;
 
                         final String projectID = getString(jsonJob, "id");
+//                        final String projectID = "NgppUi_DisplayPlanManagerUi_BuildPipeline";
                         final String projectURL = String.format("%s/%s?locator=project:%s", instanceUrl, PROJECT_API_URL_SUFFIX, projectID);
                         LOG.debug("Process projectID " + projectID + " projectURL " + projectURL);
                         LOG.debug("currentProjectNo" + currentProject);
@@ -309,7 +311,7 @@ public class DefaultTeamcityClient implements TeamcityClient {
         LocalDateTime formattedDateTime = LocalDateTime.parse(dateWithoutOffset, formatter);
         String formattedOffset = offset.substring(0,3) + ":" + offset.substring(3);
         ZoneOffset zoneOffset = ZoneOffset.of(formattedOffset);
-        return formattedDateTime.atOffset(zoneOffset).toEpochSecond();
+        return formattedDateTime.atOffset(zoneOffset).toEpochSecond()*1000;
     }
 
     //to get all the details (time, started, end)
