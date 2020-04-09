@@ -104,7 +104,7 @@ public class DefaultTeamcityClient implements TeamcityClient {
     @SuppressWarnings({"PMD.NPathComplexity", "PMD.ExcessiveMethodLength", "PMD.AvoidBranchingStatementAsLastInLoop", "PMD.EmptyIfStmt"})
     private void getProjectDetails(String projectID, String projectName, String projectURL, String instanceUrl,
                                    Map<TeamcityProject, Map<jobData, Set<BaseModel>>> result) throws URISyntaxException, ParseException {
-        LOG.debug("getProjectDetails: projectID " + projectID + " projectURL: " + projectURL);
+        LOG.debug("getProjectDetails: projectName " + projectName + " projectURL: " + projectURL);
 
         Map<jobData, Set<BaseModel>> jobDataMap = new HashMap();
 
@@ -155,9 +155,8 @@ public class DefaultTeamcityClient implements TeamcityClient {
                 builds.add(teamcityBuild);
             }
         } catch (HttpClientErrorException hce) {
-            return builds;
+            LOG.error("http client exception loading build details", hce);
         }
-
         return builds;
 
     }
