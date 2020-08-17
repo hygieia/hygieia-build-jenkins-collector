@@ -49,9 +49,9 @@
   <properties>
     <apache.rat.plugin.version>0.13</apache.rat.plugin.version>
     <bc.version>3.0.1</bc.version>
-    <com.capitalone.dashboard.core.version>3.1.5</com.capitalone.dashboard.core.version>
+    <com.capitalone.dashboard.core.version>3.7.24</com.capitalone.dashboard.core.version>
     <commons.io.version>2.4</commons.io.version>
-    <commons.lang.version>3.8.1</commons.lang.version>
+    <commons.lang.version>3.10</commons.lang.version>
     <coveralls.maven.plugin.version>4.3.0</coveralls.maven.plugin.version>
     <developmentTeam>The Hygieia Team</developmentTeam>
     <jacoco.maven.plugin.version>0.8.3</jacoco.maven.plugin.version>
@@ -73,11 +73,13 @@
     <maven.scm.publish.plugin.version>3.0.0</maven.scm.publish.plugin.version>
     <maven.site.plugin.version>3.7.1</maven.site.plugin.version>
     <mockito.all.version>1.10.19</mockito.all.version>
+    <mongodb.version>3.6.4</mongodb.version>
+    <mongo>3.6.4</mongo>
     <org.joda.joda-convert.version>1.8.1</org.joda.joda-convert.version>
     <site.publish.url>https://github.com/Hygieia/hygieia-build-jenkins-collector</site.publish.url>
     <site.publish.checkout.directory>site-content</site.publish.checkout.directory>
     <spotbugs.plugin.version>3.1.11</spotbugs.plugin.version>
-    <svnkit.version>1.8.7</svnkit.version>
+    <svnkit.version>1.10.1</svnkit.version>
   </properties>
 
   <issueManagement>
@@ -168,18 +170,7 @@
     <dependency>
       <groupId>commons-codec</groupId>
       <artifactId>commons-codec</artifactId>
-      <version>1.9</version>
-    </dependency>
-    <dependency>
-      <groupId>commons-io</groupId>
-      <artifactId>commons-io</artifactId>
-      <version>2.4</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.commons</groupId>
-      <artifactId>commons-lang3</artifactId>
-      <version>3.6</version>
+      <version>1.14</version>
     </dependency>
     <dependency>
       <groupId>org.apache.httpcomponents</groupId>
@@ -189,20 +180,11 @@
       <groupId>org.springframework</groupId>
       <artifactId>spring-web</artifactId>
     </dependency>
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-data-mongodb</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-test</artifactId>
-      <scope>test</scope>
-    </dependency>
   </dependencies>
 
   <build>
     <defaultGoal>clean verify apache-rat:check japicmp:cmp checkstyle:check spotbugs:check javadoc:javadoc</defaultGoal>
-    <finalName>${artifactId}</finalName>
+    <finalName>${project.artifactId}</finalName>
     <plugins>
       <plugin>
         <groupId>org.springframework.boot</groupId>
@@ -635,7 +617,7 @@
               <announcementDirectory>.</announcementDirectory>
               <announcementFile>RELEASE-NOTES.txt</announcementFile>
               <announceParameters>
-                <releaseVersion>${version}</releaseVersion>
+                <releaseVersion>${project.version}</releaseVersion>
               </announceParameters>
             </configuration>
             <executions>
