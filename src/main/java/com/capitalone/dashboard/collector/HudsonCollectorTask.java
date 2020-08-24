@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.commons.lang3.StringUtils;
 import org.bson.types.ObjectId;
@@ -52,6 +53,7 @@ public class HudsonCollectorTask extends CollectorTask<HudsonCollector> {
     private final HudsonSettings hudsonSettings;
     private final ComponentRepository dbComponentRepository;
 	private final ConfigurationRepository configurationRepository;
+    private AtomicInteger count = new AtomicInteger(0);
 
     @Autowired
     public HudsonCollectorTask(TaskScheduler taskScheduler,
@@ -137,6 +139,11 @@ public class HudsonCollectorTask extends CollectorTask<HudsonCollector> {
         deleteUnwantedJobs(activeJobs, existingJobs, activeServers, collector);
     }
 
+    @Override
+    public int getCount() {
+        return count.get();
+    }
+
     /**
      * Clean up unused hudson/jenkins collector items
      *
@@ -218,7 +225,7 @@ public class HudsonCollectorTask extends CollectorTask<HudsonCollector> {
     private void addNewBuilds(List<HudsonJob> enabledJobs,
                               Map<HudsonJob, Map<HudsonClient.jobData, Set<BaseModel>>> dataByJob) {
         long start = System.currentTimeMillis();
-        int count = 0;
+        count.set(0);
 
         for (HudsonJob job : enabledJobs) {
             if (job.isPushed()) continue;
@@ -242,12 +249,12 @@ public class HudsonCollectorTask extends CollectorTask<HudsonCollector> {
                     if (build != null) {
                         build.setCollectorItemId(job.getId());
                         buildRepository.save(build);
-                        count++;
+                        count.getAndIncrement();
                     }
                 }
             }
         }
-        log("New builds", start, count);
+        log("New builds", start, count.get());
     }
 
     private void addNewConfigs(List<HudsonJob> enabledJobs,

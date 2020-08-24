@@ -3,6 +3,7 @@ package com.capitalone.dashboard.collector;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.capitalone.dashboard.client.RestClientSettings;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
@@ -12,7 +13,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @ConfigurationProperties(prefix = "jenkins")
-public class HudsonSettings {
+public class HudsonSettings implements RestClientSettings {
 
 	
     private String cron;
@@ -123,11 +124,12 @@ public class HudsonSettings {
         return folderDepth;
     }
 
-    public int getConnectTimeout() { return connectTimeout; }
+    public int getRequestConnectTimeout() {
+        return connectTimeout;
+    }
 
-    public void setConnectTimeout(int connectTimeout) { this.connectTimeout = connectTimeout; }
+    public int getRequestReadTimeout() {
+        return readTimeout;
+    }
 
-    public int getReadTimeout() { return readTimeout; }
-
-    public void setReadTimeout(int readTimeout) { this.readTimeout = readTimeout; }
 }
