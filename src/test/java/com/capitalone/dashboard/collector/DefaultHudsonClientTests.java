@@ -61,7 +61,7 @@ public class DefaultHudsonClientTests {
         when(restOperationsSupplier.get(settings)).thenReturn(rest);
         settings.setPageSize(PAGE_SIZE);
         hudsonClient = defaultHudsonClient = new DefaultHudsonClient(restOperationsSupplier,
-                settings, settings);
+                settings);
     }
 
     @Test

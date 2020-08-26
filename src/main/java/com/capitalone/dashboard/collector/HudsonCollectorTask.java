@@ -14,6 +14,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.commons.lang3.StringUtils;
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
@@ -59,7 +60,7 @@ public class HudsonCollectorTask extends CollectorTask<HudsonCollector> {
     public HudsonCollectorTask(TaskScheduler taskScheduler,
                                HudsonCollectorRepository hudsonCollectorRepository,
                                HudsonJobRepository hudsonJobRepository,
-                               BuildRepository buildRepository, CollItemConfigHistoryRepository configRepository, HudsonClient hudsonClient,
+                               BuildRepository buildRepository, @Qualifier("collItemConfigHistoryRepository") CollItemConfigHistoryRepository configRepository, HudsonClient hudsonClient,
                                HudsonSettings hudsonSettings,
                                ComponentRepository dbComponentRepository, 
                                ConfigurationRepository configurationRepository) {

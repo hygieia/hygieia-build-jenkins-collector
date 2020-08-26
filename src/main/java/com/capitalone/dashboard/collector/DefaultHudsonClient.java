@@ -100,8 +100,8 @@ public class DefaultHudsonClient implements HudsonClient {
     private static final String DATE_FORMAT = "yyyy-MM-dd_HH-mm-ss";
 
     @Autowired
-    public DefaultHudsonClient(RestOperationsSupplier restOperationsSupplier, HudsonSettings settings, RestClientSettings restClientSettings) {
-        this.rest = restOperationsSupplier.get(restClientSettings);
+    public DefaultHudsonClient(RestOperationsSupplier restOperationsSupplier, HudsonSettings settings) {
+        this.rest = restOperationsSupplier.get(settings);
         this.settings = settings;
     }
 
