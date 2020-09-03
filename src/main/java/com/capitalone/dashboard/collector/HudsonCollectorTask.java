@@ -140,11 +140,6 @@ public class HudsonCollectorTask extends CollectorTask<HudsonCollector> {
         deleteUnwantedJobs(activeJobs, existingJobs, activeServers, collector);
     }
 
-    @Override
-    public int getCount() {
-        return count.get();
-    }
-
     /**
      * Clean up unused hudson/jenkins collector items
      *

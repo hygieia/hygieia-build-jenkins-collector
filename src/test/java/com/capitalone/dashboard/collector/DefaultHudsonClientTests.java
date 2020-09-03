@@ -1,6 +1,5 @@
 package com.capitalone.dashboard.collector;
 
-import com.capitalone.dashboard.client.RestClientSettings;
 import com.capitalone.dashboard.client.RestOperationsSupplier;
 import com.capitalone.dashboard.model.BaseModel;
 import com.capitalone.dashboard.model.Build;
@@ -58,7 +57,7 @@ public class DefaultHudsonClientTests {
     @Before
     public void init() {
         settings = new HudsonSettings();
-        when(restOperationsSupplier.get(settings)).thenReturn(rest);
+        when(restOperationsSupplier.get()).thenReturn(rest);
         settings.setPageSize(PAGE_SIZE);
         hudsonClient = defaultHudsonClient = new DefaultHudsonClient(restOperationsSupplier,
                 settings);

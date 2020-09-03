@@ -1,6 +1,5 @@
 package com.capitalone.dashboard.collector;
 
-import com.capitalone.dashboard.client.RestClientSettings;
 import com.capitalone.dashboard.client.RestOperationsSupplier;
 import com.capitalone.dashboard.model.BaseModel;
 import com.capitalone.dashboard.model.Build;
@@ -101,7 +100,7 @@ public class DefaultHudsonClient implements HudsonClient {
 
     @Autowired
     public DefaultHudsonClient(RestOperationsSupplier restOperationsSupplier, HudsonSettings settings) {
-        this.rest = restOperationsSupplier.get(settings);
+        this.rest = restOperationsSupplier.get();
         this.settings = settings;
     }
 
