@@ -1,5 +1,6 @@
 package com.capitalone.dashboard.collector;
 
+import com.capitalone.dashboard.client.RestOperationsSupplier;
 import com.capitalone.dashboard.model.BaseModel;
 import com.capitalone.dashboard.model.Build;
 import com.capitalone.dashboard.model.BuildStatus;
@@ -7,7 +8,6 @@ import com.capitalone.dashboard.model.HudsonJob;
 import com.capitalone.dashboard.model.RepoBranch;
 import com.capitalone.dashboard.model.RepoBranch.RepoType;
 import com.capitalone.dashboard.model.SCM;
-import com.capitalone.dashboard.util.Supplier;
 import org.apache.commons.io.IOUtils;
 import org.junit.Before;
 import org.junit.Test;
@@ -45,7 +45,7 @@ import static org.mockito.Mockito.when;
 @RunWith(MockitoJUnitRunner.class)
 public class DefaultHudsonClientTests {
 
-    @Mock private Supplier<RestOperations> restOperationsSupplier;
+    @Mock private RestOperationsSupplier restOperationsSupplier;
     @Mock private RestOperations rest;
     private HudsonSettings settings;
     private HudsonClient hudsonClient;
@@ -56,8 +56,8 @@ public class DefaultHudsonClientTests {
 
     @Before
     public void init() {
-        when(restOperationsSupplier.get()).thenReturn(rest);
         settings = new HudsonSettings();
+        when(restOperationsSupplier.get()).thenReturn(rest);
         settings.setPageSize(PAGE_SIZE);
         hudsonClient = defaultHudsonClient = new DefaultHudsonClient(restOperationsSupplier,
                 settings);

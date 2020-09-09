@@ -9,10 +9,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.commons.lang3.StringUtils;
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
@@ -52,12 +54,13 @@ public class HudsonCollectorTask extends CollectorTask<HudsonCollector> {
     private final HudsonSettings hudsonSettings;
     private final ComponentRepository dbComponentRepository;
 	private final ConfigurationRepository configurationRepository;
+    private AtomicInteger count = new AtomicInteger(0);
 
     @Autowired
     public HudsonCollectorTask(TaskScheduler taskScheduler,
                                HudsonCollectorRepository hudsonCollectorRepository,
                                HudsonJobRepository hudsonJobRepository,
-                               BuildRepository buildRepository, CollItemConfigHistoryRepository configRepository, HudsonClient hudsonClient,
+                               BuildRepository buildRepository, @Qualifier("collItemConfigHistoryRepository") CollItemConfigHistoryRepository configRepository, HudsonClient hudsonClient,
                                HudsonSettings hudsonSettings,
                                ComponentRepository dbComponentRepository, 
                                ConfigurationRepository configurationRepository) {
@@ -218,7 +221,7 @@ public class HudsonCollectorTask extends CollectorTask<HudsonCollector> {
     private void addNewBuilds(List<HudsonJob> enabledJobs,
                               Map<HudsonJob, Map<HudsonClient.jobData, Set<BaseModel>>> dataByJob) {
         long start = System.currentTimeMillis();
-        int count = 0;
+        count.set(0);
 
         for (HudsonJob job : enabledJobs) {
             if (job.isPushed()) continue;
@@ -242,12 +245,12 @@ public class HudsonCollectorTask extends CollectorTask<HudsonCollector> {
                     if (build != null) {
                         build.setCollectorItemId(job.getId());
                         buildRepository.save(build);
-                        count++;
+                        count.getAndIncrement();
                     }
                 }
             }
         }
-        log("New builds", start, count);
+        log("New builds", start, count.get());
     }
 
     private void addNewConfigs(List<HudsonJob> enabledJobs,

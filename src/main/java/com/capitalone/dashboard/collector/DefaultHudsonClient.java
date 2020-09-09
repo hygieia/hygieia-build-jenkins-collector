@@ -1,5 +1,6 @@
 package com.capitalone.dashboard.collector;
 
+import com.capitalone.dashboard.client.RestOperationsSupplier;
 import com.capitalone.dashboard.model.BaseModel;
 import com.capitalone.dashboard.model.Build;
 import com.capitalone.dashboard.model.BuildStatus;
@@ -8,7 +9,6 @@ import com.capitalone.dashboard.model.HudsonJob;
 import com.capitalone.dashboard.model.HudsonJobConfig;
 import com.capitalone.dashboard.model.RepoBranch;
 import com.capitalone.dashboard.model.SCM;
-import com.capitalone.dashboard.util.Supplier;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -99,7 +99,7 @@ public class DefaultHudsonClient implements HudsonClient {
     private static final String DATE_FORMAT = "yyyy-MM-dd_HH-mm-ss";
 
     @Autowired
-    public DefaultHudsonClient(Supplier<RestOperations> restOperationsSupplier, HudsonSettings settings) {
+    public DefaultHudsonClient(RestOperationsSupplier restOperationsSupplier, HudsonSettings settings) {
         this.rest = restOperationsSupplier.get();
         this.settings = settings;
     }

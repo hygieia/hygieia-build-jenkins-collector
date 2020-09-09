@@ -123,11 +123,12 @@ public class HudsonSettings {
         return folderDepth;
     }
 
-    public int getConnectTimeout() { return connectTimeout; }
+    public int getRequestConnectTimeout() {
+        return connectTimeout;
+    }
 
-    public void setConnectTimeout(int connectTimeout) { this.connectTimeout = connectTimeout; }
+    public int getRequestReadTimeout() {
+        return readTimeout;
+    }
 
-    public int getReadTimeout() { return readTimeout; }
-
-    public void setReadTimeout(int readTimeout) { this.readTimeout = readTimeout; }
 }
