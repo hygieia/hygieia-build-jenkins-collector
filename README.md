@@ -1,3 +1,4 @@
+## Due to lack of activity, this repo is currently not being supported and is archived as of 07/12/22. Please note since archival, the project is not maintained and will be available in a read-only state. Please reach out to hygieia2@capitalone.com should you have any questions.
 Configure the Jenkins Collector to display and monitor information (related to build status) on the Hygieia Dashboard, from Jenkins. Hygieia uses Spring Boot to package the collector as an executable JAR file with dependencies.
 
 # Table of Contents
